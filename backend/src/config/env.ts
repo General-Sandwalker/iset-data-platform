@@ -1,0 +1,20 @@
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+export const config = {
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  PORT: parseInt(process.env.PORT || '4000', 10),
+  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/iset_db',
+  JWT_SECRET: process.env.JWT_SECRET || 'change-me-in-production',
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '24h',
+  SUPER_ADMIN_USERNAME: process.env.SUPER_ADMIN_USERNAME || 'admin',
+  SUPER_ADMIN_PASSWORD: process.env.SUPER_ADMIN_PASSWORD || 'change-me',
+  GROQ_API_KEY: process.env.GROQ_API_KEY || '',
+  UPLOAD_MAX_SIZE: parseInt(process.env.UPLOAD_MAX_SIZE || '52428800', 10),
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+  SMTP_HOST: process.env.SMTP_HOST || '',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || '',
+} as const;
