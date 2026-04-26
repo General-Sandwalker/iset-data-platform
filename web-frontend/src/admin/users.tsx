@@ -1,9 +1,10 @@
 import { Card, Typography, Table, Button, Space, Input, Select, Modal, Form, message, Popconfirm, Tag } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, KeyOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, KeyOutlined, UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../core/api/client';
 import { useCreateUser, useUpdateUser, useDeleteUser, useResetUserPassword, type User, type CreateUserInput } from '../../core/api/users';
+import UserImportWizard from './user-import-wizard';
 
 const { Title } = Typography;
 const { confirm } = Modal;
@@ -34,6 +35,7 @@ export default function UserManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [form] = Form.useForm();
 
   const { data, isLoading } = useQuery({
@@ -164,6 +166,9 @@ export default function UserManagementPage() {
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             Add User
           </Button>
+          <Button icon={<UploadOutlined />} onClick={() => setIsImportOpen(true)}>
+            Import Users
+          </Button>
         </Space>
         <Table
           columns={columns}
@@ -214,6 +219,15 @@ export default function UserManagementPage() {
             </Form.Item>
           )}
         </Form>
+      </Modal>
+      <Modal
+        title="Import Users from CSV/Excel"
+        open={isImportOpen}
+        onCancel={() => setIsImportOpen(false)}
+        footer={null}
+        width={700}
+      >
+        <UserImportWizard onComplete={() => { setIsImportOpen(false); queryClient.invalidateQueries({ queryKey: ['users'] }); }} />
       </Modal>
     </div>
   );
