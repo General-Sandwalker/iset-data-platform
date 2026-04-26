@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { PublicLayout } from './app/layouts/PublicLayout';
 import { AdminLayout } from './app/layouts/AdminLayout';
 import LoginPage from './public-pages/login';
@@ -26,91 +26,134 @@ import { RoleGuard } from './app/guards/RoleGuard';
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/public/dashboards/:slug" element={<PublicDashboardPage />} />
-          <Route path="/public/surveys/:slug" element={<PublicSurveyPage />} />
-        </Route>
-
+    <Routes>
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route
-          element={
-            <AuthGuard>
-              <AdminLayout />
-            </AuthGuard>
-          }
-        >
-          <Route path="/admin" element={<DashboardPage />} />
-          <Route path="/admin/users" element={<UserManagementPage />} />
-          <Route path="/admin/database" element={<DatabasePage />} />
-          <Route path="/admin/import" element={<ImportPage />} />
-          <Route path="/admin/surveys" element={<SurveysPage />} />
-          <Route path="/admin/partnerships" element={<PartnershipsPage />} />
-          <Route path="/admin/settings" element={<SettingsPage />} />
-        </Route>
+          path="/public/dashboards/:slug"
+          element={<PublicDashboardPage />}
+        />
+        <Route path="/public/surveys/:slug" element={<PublicSurveyPage />} />
+      </Route>
 
+      <Route
+        element={
+          <AuthGuard>
+            <AdminLayout />
+          </AuthGuard>
+        }
+      >
+        <Route path="/admin" element={<DashboardPage />} />
+        <Route path="/admin/users" element={<UserManagementPage />} />
+        <Route path="/admin/database" element={<DatabasePage />} />
+        <Route path="/admin/import" element={<ImportPage />} />
+        <Route path="/admin/surveys" element={<SurveysPage />} />
         <Route
+          path="/admin/visualizations/charts"
           element={
-            <AuthGuard>
-              <RoleGuard allowedRoles={['super_admin', 'admin', 'responsable_observatoire']} />
-            </AuthGuard>
+            <RoleGuard
+              allowedRoles={['super_admin', 'admin', 'responsable_observatoire']}
+            >
+              <ChartsPage />
+            </RoleGuard>
           }
-        >
-          <Route path="/admin/visualizations/charts" element={<ChartsPage />} />
-          <Route path="/admin/visualizations/dashboards" element={<DashboardsPage />} />
-          <Route path="/admin/reports" element={<ReportsPage />} />
-          <Route path="/admin/analytics/academic" element={<AcademicAnalyticsPage />} />
-          <Route path="/admin/analytics/insertion" element={<InsertionAnalyticsPage />} />
-        </Route>
-
+        />
         <Route
+          path="/admin/visualizations/dashboards"
           element={
-            <AuthGuard>
-              <StudentDashboard />
-            </AuthGuard>
+            <RoleGuard
+              allowedRoles={['super_admin', 'admin', 'responsable_observatoire']}
+            >
+              <DashboardsPage />
+            </RoleGuard>
           }
-        >
-          <Route path="/student" element={<Navigate to="/student/dashboard" />} />
-          <Route path="/student/dashboard" element={<StudentDashboard />} />
-        </Route>
-
+        />
         <Route
+          path="/admin/reports"
           element={
-            <AuthGuard>
-              <TeacherDashboard />
-            </AuthGuard>
+            <RoleGuard
+              allowedRoles={['super_admin', 'admin', 'responsable_observatoire']}
+            >
+              <ReportsPage />
+            </RoleGuard>
           }
-        >
-          <Route path="/teacher" element={<Navigate to="/teacher/dashboard" />} />
-          <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-        </Route>
-
+        />
         <Route
+          path="/admin/analytics/academic"
           element={
-            <AuthGuard>
-              <AlumniDashboard />
-            </AuthGuard>
+            <RoleGuard
+              allowedRoles={['super_admin', 'admin', 'responsable_observatoire']}
+            >
+              <AcademicAnalyticsPage />
+            </RoleGuard>
           }
-        >
-          <Route path="/alumni" element={<Navigate to="/alumni/dashboard" />} />
-          <Route path="/alumni/dashboard" element={<AlumniDashboard />} />
-        </Route>
-
+        />
         <Route
+          path="/admin/analytics/insertion"
           element={
-            <AuthGuard>
-              <RoleGuard allowedRoles={['responsable_observatoire']} />
-            </AuthGuard>
+            <RoleGuard
+              allowedRoles={['super_admin', 'admin', 'responsable_observatoire']}
+            >
+              <InsertionAnalyticsPage />
+            </RoleGuard>
           }
-        >
-          <Route path="/observatoire" element={<EcoleDashboard />} />
-        </Route>
+        />
+        <Route path="/admin/partnerships" element={<PartnershipsPage />} />
+        <Route path="/admin/settings" element={<SettingsPage />} />
+      </Route>
 
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </BrowserRouter>
+      <Route
+        element={
+          <AuthGuard>
+            <RoleGuard allowedRoles={['etudiant']} />
+          </AuthGuard>
+        }
+      >
+        <Route path="/student" element={<Navigate to="/student/dashboard" />} />
+        <Route path="/student/dashboard" element={<StudentDashboard />} />
+      </Route>
+
+      <Route
+        element={
+          <AuthGuard>
+            <RoleGuard allowedRoles={['enseignant']} />
+          </AuthGuard>
+        }
+      >
+        <Route
+          path="/teacher"
+          element={<Navigate to="/teacher/dashboard" />}
+        />
+        <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+      </Route>
+
+      <Route
+        element={
+          <AuthGuard>
+            <RoleGuard allowedRoles={['alumni']} />
+          </AuthGuard>
+        }
+      >
+        <Route
+          path="/alumni"
+          element={<Navigate to="/alumni/dashboard" />}
+        />
+        <Route path="/alumni/dashboard" element={<AlumniDashboard />} />
+      </Route>
+
+      <Route
+        element={
+          <AuthGuard>
+            <RoleGuard allowedRoles={['responsable_observatoire']} />
+          </AuthGuard>
+        }
+      >
+        <Route path="/observatoire" element={<EcoleDashboard />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
   );
 }
 

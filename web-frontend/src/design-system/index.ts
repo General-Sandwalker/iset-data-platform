@@ -1,1 +1,1 @@
-export { themeConfig, darkThemeConfig } from './theme';
+export { baseThemeConfig, lightTokens, darkTokens } from './theme';

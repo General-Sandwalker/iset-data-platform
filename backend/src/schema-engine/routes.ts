@@ -9,6 +9,8 @@ import {
   createTable, listTables, getTableById, updateTable, deleteTable,
   addField, listFields, getFieldById, updateField, deleteField,
   fieldTypes,
+  createRelationship, listRelationships, getRelationshipById, updateRelationship, deleteRelationship,
+  relationshipTypes,
 } from './service.js';
 
 const router = Router();
@@ -43,14 +45,14 @@ const updateFieldSchema = z.object({
 
 router.use(authenticate);
 
-router.get('/', async (req, res, next) => {
+router.get('/tables', async (req, res, next) => {
   try {
     const tables = await listTables();
     sendSuccess(res, tables);
   } catch (err) { next(err); }
 });
 
-router.post('/', requireAdmin, validate({ body: createTableSchema }), async (req, res, next) => {
+router.post('/tables', requireAdmin, validate({ body: createTableSchema }), async (req, res, next) => {
   try {
     const table = await createTable({ ...req.body, createdBy: req.user!.id });
     await logActivity({ userId: req.user!.id, action: 'CREATE_TABLE', entityType: 'dynamic_table', ipAddress: req.ip });
@@ -58,7 +60,7 @@ router.post('/', requireAdmin, validate({ body: createTableSchema }), async (req
   } catch (err) { next(err); }
 });
 
-router.get('/:id', validate({ params: uuidParam }), async (req, res, next) => {
+router.get('/tables/:id', validate({ params: uuidParam }), async (req, res, next) => {
   try {
     const table = await getTableById(req.params.id);
     const fields = await listFields(req.params.id);
@@ -66,14 +68,14 @@ router.get('/:id', validate({ params: uuidParam }), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', requireAdmin, validate({ params: uuidParam, body: updateTableSchema }), async (req, res, next) => {
+router.patch('/tables/:id', requireAdmin, validate({ params: uuidParam, body: updateTableSchema }), async (req, res, next) => {
   try {
     const table = await updateTable(req.params.id, req.body);
     sendSuccess(res, table);
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', requireSuperAdmin, validate({ params: uuidParam }), async (req, res, next) => {
+router.delete('/tables/:id', requireSuperAdmin, validate({ params: uuidParam }), async (req, res, next) => {
   try {
     await deleteTable(req.params.id);
     await logActivity({ userId: req.user!.id, action: 'DELETE_TABLE', entityType: 'dynamic_table', ipAddress: req.ip });
@@ -81,31 +83,82 @@ router.delete('/:id', requireSuperAdmin, validate({ params: uuidParam }), async 
   } catch (err) { next(err); }
 });
 
-router.get('/:id/fields', validate({ params: uuidParam }), async (req, res, next) => {
+router.get('/tables/:id/fields', validate({ params: uuidParam }), async (req, res, next) => {
   try {
     const fields = await listFields(req.params.id);
     sendSuccess(res, fields);
   } catch (err) { next(err); }
 });
 
-router.post('/:id/fields', requireAdmin, validate({ params: uuidParam, body: addFieldSchema }), async (req, res, next) => {
+router.post('/tables/:id/fields', requireAdmin, validate({ params: uuidParam, body: addFieldSchema }), async (req, res, next) => {
   try {
     const field = await addField({ ...req.body, tableId: req.params.id });
     sendCreated(res, field);
   } catch (err) { next(err); }
 });
 
-router.patch('/fields/:id', requireAdmin, validate({ params: uuidParam, body: updateFieldSchema }), async (req, res, next) => {
+router.patch('/tables/fields/:id', requireAdmin, validate({ params: uuidParam, body: updateFieldSchema }), async (req, res, next) => {
   try {
     const field = await updateField(req.params.id, req.body);
     sendSuccess(res, field);
   } catch (err) { next(err); }
 });
 
-router.delete('/fields/:id', requireAdmin, validate({ params: uuidParam }), async (req, res, next) => {
+router.delete('/tables/fields/:id', requireAdmin, validate({ params: uuidParam }), async (req, res, next) => {
   try {
     await deleteField(req.params.id);
     sendSuccess(res, { message: 'Field deleted' });
+  } catch (err) { next(err); }
+});
+
+const createRelationshipSchema = z.object({
+  sourceTableId: z.string().uuid(),
+  sourceFieldId: z.string().uuid(),
+  targetTableId: z.string().uuid(),
+  targetFieldId: z.string().uuid().optional(),
+  relationshipType: z.enum(relationshipTypes as unknown as [string, ...string[]]),
+});
+
+const updateRelationshipSchema = z.object({
+  relationshipType: z.enum(relationshipTypes as unknown as [string, ...string[]]).optional(),
+  targetFieldId: z.string().uuid().optional(),
+});
+
+router.get('/relationships', async (req, res, next) => {
+  try {
+    const tableId = req.query.tableId as string | undefined;
+    const relationships = await listRelationships(tableId);
+    sendSuccess(res, relationships);
+  } catch (err) { next(err); }
+});
+
+router.post('/relationships', requireAdmin, validate({ body: createRelationshipSchema }), async (req, res, next) => {
+  try {
+    const relationship = await createRelationship(req.body);
+    await logActivity({ userId: req.user!.id, action: 'CREATE_RELATIONSHIP', entityType: 'dynamic_relationship', entityId: relationship.id, ipAddress: req.ip });
+    sendCreated(res, relationship);
+  } catch (err) { next(err); }
+});
+
+router.get('/relationships/:id', validate({ params: uuidParam }), async (req, res, next) => {
+  try {
+    const relationship = await getRelationshipById(req.params.id);
+    sendSuccess(res, relationship);
+  } catch (err) { next(err); }
+});
+
+router.patch('/relationships/:id', requireAdmin, validate({ params: uuidParam, body: updateRelationshipSchema }), async (req, res, next) => {
+  try {
+    const relationship = await updateRelationship(req.params.id, req.body);
+    sendSuccess(res, relationship);
+  } catch (err) { next(err); }
+});
+
+router.delete('/relationships/:id', requireAdmin, validate({ params: uuidParam }), async (req, res, next) => {
+  try {
+    await deleteRelationship(req.params.id);
+    await logActivity({ userId: req.user!.id, action: 'DELETE_RELATIONSHIP', entityType: 'dynamic_relationship', entityId: req.params.id, ipAddress: req.ip });
+    sendSuccess(res, { message: 'Relationship deleted' });
   } catch (err) { next(err); }
 });
 

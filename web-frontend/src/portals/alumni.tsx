@@ -1,28 +1,46 @@
-import { Layout, Card, Typography, Row, Col, Statistic } from 'antd';
+import { Card, Typography, Row, Col, Statistic, theme } from 'antd';
 import { useAuthStore } from '../core/stores/auth.store';
+import { FileTextOutlined, GlobalOutlined } from '@ant-design/icons';
 
-const { Header, Content } = Layout;
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 export default function AlumniDashboard() {
   const { user } = useAuthStore();
+  const { token } = theme.useToken();
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #e5e7eb' }}>
-        <Title level={4} style={{ lineHeight: '64px', margin: 0 }}>Alumni Portal</Title>
-      </Header>
-      <Content style={{ padding: 24 }}>
-        <Title level={4}>Welcome, {user?.firstName} {user?.lastName}</Title>
-        <Row gutter={16} style={{ marginTop: 24 }}>
-          <Col xs={24} sm={12} md={8}>
-            <Card><Statistic title="My Surveys" value={0} /></Card>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Card><Statistic title="Public Stats" value={0} /></Card>
-          </Col>
-        </Row>
-      </Content>
-    </Layout>
+    <div style={{ minHeight: '100vh', background: token.colorBgBase, padding: 24 }}>
+      <div style={{ marginBottom: 32 }}>
+        <Title level={3} style={{ color: token.colorText, marginBottom: 4 }}>
+          Alumni Portal
+        </Title>
+        <Text style={{ color: token.colorTextSecondary }}>
+          Welcome back, {user?.firstName} {user?.lastName}
+        </Text>
+      </div>
+
+      <Row gutter={[20, 20]}>
+        <Col xs={24} sm={12} lg={8}>
+          <Card style={{ borderRadius: 16, border: `1px solid ${token.colorBorderSecondary}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(168,85,247,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a855f7' }}>
+                <FileTextOutlined style={{ fontSize: 20 }} />
+              </div>
+              <Statistic title="My Surveys" value={0} valueStyle={{ fontWeight: 700 }} />
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={8}>
+          <Card style={{ borderRadius: 16, border: `1px solid ${token.colorBorderSecondary}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+                <GlobalOutlined style={{ fontSize: 20 }} />
+              </div>
+              <Statistic title="Public Stats" value={0} valueStyle={{ fontWeight: 700 }} />
+            </div>
+          </Card>
+        </Col>
+      </Row>
+    </div>
   );
 }

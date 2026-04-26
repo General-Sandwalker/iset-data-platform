@@ -37,11 +37,11 @@ async function startServer() {
     sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  apiRouter.use('/auth', authRoutes);
-  apiRouter.use('/admin/users', authAdminRoutes);
-  apiRouter.use('/users', userRoutes);
-  apiRouter.use('/users/import', userImportRoutes);
-  apiRouter.use('/schema/tables', schemaRoutes);
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/admin/users', authAdminRoutes);
+apiRouter.use('/users', userRoutes);
+apiRouter.use('/users/import', userImportRoutes);
+apiRouter.use('/schema', schemaRoutes);
 
   app.use('/api/v1', apiRouter);
 

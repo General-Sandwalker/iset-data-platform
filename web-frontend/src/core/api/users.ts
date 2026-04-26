@@ -24,7 +24,16 @@ export interface CreateUserInput {
   phone?: string;
 }
 
-export function useUsers(params?: { page?: number; limit?: number; role?: string; search?: string }) {
+export interface UpdateUserInput extends Partial<CreateUserInput> {
+  isActive?: boolean;
+}
+
+export function useUsers(params?: {
+  page?: number;
+  limit?: number;
+  role?: string;
+  search?: string;
+}) {
   return useQuery({
     queryKey: ['users', params],
     queryFn: async () => {
@@ -61,7 +70,10 @@ export function useCreateUser() {
 export function useUpdateUser() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...input }: { id: string } & Partial<CreateUserInput>) => {
+    mutationFn: async ({
+      id,
+      ...input
+    }: { id: string } & UpdateUserInput) => {
       const response = await apiClient.patch(`/users/${id}`, input);
       return response.data;
     },
@@ -85,10 +97,11 @@ export function useDeleteUser() {
 }
 
 export function useResetUserPassword() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiClient.post(`/admin/users/${id}/reset-password`);
+      const response = await apiClient.post(
+        `/admin/users/${id}/reset-password`
+      );
       return response.data.data.tempPassword as string;
     },
   });
