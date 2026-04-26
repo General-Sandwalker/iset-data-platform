@@ -15,8 +15,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "noImplicitAny": false,
-    "moduleDetection": "force",
-    "noEmit": true
+    "moduleDetection": "force"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
