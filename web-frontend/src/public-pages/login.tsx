@@ -1,6 +1,6 @@
-import { Form, Input, Button, Card, Typography, Alert } from 'antd';
+import { Form, Input, Button, Card, Typography, Alert, Space, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { apiClient } from '../../core/api/client';
 import { useAuthStore } from '../../core/stores/auth.store';
@@ -12,9 +12,18 @@ interface LoginForm {
   password: string;
 }
 
+const roleDashboard: Record<string, string> = {
+  super_admin: '/admin',
+  admin: '/admin',
+  responsable_observatoire: '/admin',
+  enseignant: '/teacher',
+  etudiant: '/student',
+  alumni: '/alumni',
+};
+
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { login: storeLogin } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,8 +33,10 @@ export default function LoginPage() {
     try {
       const response = await apiClient.post('/auth/login', values);
       if (response.data.success) {
-        login(response.data.data.token, response.data.data.user);
-        navigate('/admin');
+        const user = response.data.data.user;
+        storeLogin(response.data.data.token, user);
+        const redirect = roleDashboard[user.role] || '/admin';
+        navigate(redirect);
       } else {
         setError(response.data.error?.message || 'Login failed');
       }
@@ -44,12 +55,24 @@ export default function LoginPage() {
           <Title level={5} type="secondary">Sign In</Title>
         </div>
         {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
-        <Form name="login" onFinish={onFinish} layout="vertical">
-          <Form.Item name="identifier" rules={[{ required: true, message: 'Please enter your CIN or username' }]}>
+        <Form name="login" onFinish={onFinish} layout="vertical" validateTrigger="onBlur">
+          <Form.Item
+            name="identifier"
+            rules={[{ required: true, message: 'Please enter your CIN or username' }]}
+          >
             <Input prefix={<UserOutlined />} placeholder="CIN or Username" size="large" />
           </Form.Item>
-          <Form.Item name="password" rules={[{ required: true, message: 'Please enter your password' }]}>
+          <Form.Item
+            name="password"
+            rules={[
+              { required: true, message: 'Please enter your password' },
+              { min: 6, message: 'Password must be at least 6 characters' },
+            ]}
+          >
             <Input.Password prefix={<LockOutlined />} placeholder="Password" size="large" />
+          </Form.Item>
+          <Form.Item style={{ textAlign: 'right' }}>
+            <Link to="/forgot-password">Forgot password?</Link>
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" loading={loading} block size="large">
