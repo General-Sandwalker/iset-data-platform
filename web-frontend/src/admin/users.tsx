@@ -2,8 +2,8 @@ import { Card, Typography, Table, Button, Space, Input, Select, Modal, Form, mes
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, KeyOutlined, UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../../core/api/client';
-import { useCreateUser, useUpdateUser, useDeleteUser, useResetUserPassword, type User, type CreateUserInput } from '../../core/api/users';
+import { apiClient } from '../core/api/client';
+import { useCreateUser, useUpdateUser, useDeleteUser, useResetUserPassword, type User, type CreateUserInput } from '../core/api/users';
 import UserImportWizard from './user-import-wizard';
 
 const { Title } = Typography;

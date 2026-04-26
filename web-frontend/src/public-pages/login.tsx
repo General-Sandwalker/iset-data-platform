@@ -2,8 +2,8 @@ import { Form, Input, Button, Card, Typography, Alert, Space, message } from 'an
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
-import { apiClient } from '../../core/api/client';
-import { useAuthStore } from '../../core/stores/auth.store';
+import { apiClient } from '../core/api/client';
+import { useAuthStore } from '../core/stores/auth.store';
 
 const { Title } = Typography;
 

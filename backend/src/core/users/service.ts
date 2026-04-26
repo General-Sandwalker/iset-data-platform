@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { query } from '../../config/database.js';
 import { HttpError } from '../../middleware/auth.js';
 import type { Request } from 'express';
@@ -31,6 +31,7 @@ export interface CreateUserInput {
 }
 
 export interface UpdateUserInput {
+  cin?: string;
   email?: string;
   firstName?: string;
   lastName?: string;

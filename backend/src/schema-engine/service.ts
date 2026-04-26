@@ -1,5 +1,5 @@
-import { query, getClient } from '../../config/database.js';
-import { HttpError } from '../../middleware/auth.js';
+import { query, getClient } from '../config/database.js';
+import { HttpError } from '../middleware/auth.js';
 import { z } from 'zod';
 
 export const fieldTypes = ['text', 'number', 'decimal', 'date', 'datetime', 'boolean', 'select', 'multiselect', 'email', 'phone', 'file', 'user_link'] as const;

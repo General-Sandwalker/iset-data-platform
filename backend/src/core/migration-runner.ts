@@ -1,10 +1,8 @@
 import { readFileSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { pool, query } from '../config/database.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = join(__dirname, '../../migrations');
+const MIGRATIONS_DIR = join(process.cwd(), 'migrations');
 
 interface MigrationRecord {
   filename: string;
@@ -12,6 +10,13 @@ interface MigrationRecord {
 
 async function getExecutedMigrations(): Promise<string[]> {
   try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) NOT NULL UNIQUE,
+        executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
     const result = await query<MigrationRecord>('SELECT filename FROM schema_migrations ORDER BY id');
     return result.rows.map((row) => row.filename);
   } catch {
@@ -65,16 +70,4 @@ export async function runMigrations(): Promise<void> {
   }
 
   console.log('All migrations completed successfully.');
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runMigrations()
-    .then(() => {
-      console.log('Migration runner finished.');
-      process.exit(0);
-    })
-    .catch((err) => {
-      console.error('Migration runner failed:', err);
-      process.exit(1);
-    });
 }

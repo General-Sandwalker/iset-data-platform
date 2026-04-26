@@ -16,11 +16,14 @@ interface ApiResponse<T> {
 }
 
 export function sendSuccess<T>(res: Response, data: T, meta?: ApiResponse<T>['meta']): void {
-  res.json({
+  const payload: ApiResponse<T> = {
     success: true,
     data,
-    ...(meta && { meta }),
-  } as ApiResponse<T>);
+  };
+  if (meta) {
+    payload.meta = meta;
+  }
+  res.json(payload);
 }
 
 export function sendCreated<T>(res: Response, data: T): void {
@@ -37,14 +40,14 @@ export function sendError(
   statusCode: number = 400,
   details?: unknown
 ): void {
+  const errorObj: { code: string; message: string; details?: unknown } = { code, message };
+  if (details) {
+    errorObj.details = details;
+  }
   res.status(statusCode).json({
     success: false,
-    error: {
-      code,
-      message,
-      ...(details && { details }),
-    },
-  } as ApiResponse<null>);
+    error: errorObj,
+  });
 }
 
 export function sendNoContent(res: Response): void {

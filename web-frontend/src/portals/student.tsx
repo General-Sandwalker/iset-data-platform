@@ -1,5 +1,5 @@
 import { Layout, Card, Typography, Row, Col, Statistic } from 'antd';
-import { useAuthStore } from '../../core/stores/auth.store';
+import { useAuthStore } from '../core/stores/auth.store';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;

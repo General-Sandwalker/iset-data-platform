@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useThemeStore } from './core/stores/theme.store';
 import { PublicLayout } from './app/layouts/PublicLayout';
 import { AdminLayout } from './app/layouts/AdminLayout';
 import LoginPage from './public-pages/login';
@@ -22,14 +21,12 @@ import StudentDashboard from './portals/student';
 import TeacherDashboard from './portals/teacher';
 import AlumniDashboard from './portals/alumni';
 import EcoleDashboard from './portals/ecole';
-import { AuthGuard } from './app guards/AuthGuard';
-import { RoleGuard } from './app guards/RoleGuard';
+import { AuthGuard } from './app/guards/AuthGuard';
+import { RoleGuard } from './app/guards/RoleGuard';
 
 function App() {
-  const { isDarkMode } = useThemeStore();
-
   return (
-    <BrowserRouter future={{ v7_startTransition: true }}>
+    <BrowserRouter>
       <Routes>
         <Route element={<PublicLayout />}>
           <Route path="/" element={<LandingPage />} />

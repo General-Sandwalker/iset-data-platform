@@ -39,6 +39,6 @@ export async function groqChat(
     throw new Error(`Groq API error: ${response.status} - ${error}`);
   }
 
-  const data: GroqResponse = await response.json();
+  const data = await response.json() as GroqResponse;
   return data.choices[0]?.message?.content || '';
 }

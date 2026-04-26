@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { validate, uuidParam } from '../../middleware/validation.js';
-import { authenticate } from '../../middleware/auth.js';
-import { requireAdmin, requireSuperAdmin } from '../../middleware/rbac.js';
-import { sendSuccess, sendCreated } from '../../middleware/response.js';
-import { logActivity } from '../../middleware/activity-logger.js';
+import { validate, uuidParam } from '../middleware/validation.js';
+import { authenticate } from '../middleware/auth.js';
+import { requireAdmin, requireSuperAdmin } from '../middleware/rbac.js';
+import { sendSuccess, sendCreated } from '../middleware/response.js';
+import { logActivity } from '../middleware/activity-logger.js';
 import {
   createTable, listTables, getTableById, updateTable, deleteTable,
   addField, listFields, getFieldById, updateField, deleteField,
