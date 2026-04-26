@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import { errorHandler } from './middleware/error-handler.js';
 import { config } from './config/env.js';
 import { runMigrations } from './core/migration-runner.js';
+import { globalLimiter, authLimiter, aiLimiter } from './middleware/rate-limit.js';
+import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
   await runMigrations();
@@ -16,16 +18,27 @@ async function startServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  app.use(globalLimiter);
+
+  app.get('/health', (req, res) => {
+    sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  const apiRouter = express.Router();
+
+  apiRouter.get('/health', (req, res) => {
+    sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  app.use('/api/v1', apiRouter);
 
   app.use(errorHandler);
 
   const PORT = config.PORT || 4000;
 
   app.listen(PORT, () => {
-    console.log(`ISET Backend running on port ${PORT}`);
+    console.log(`ISET Backend running on http://localhost:${PORT}`);
+    console.log(`API available at http://localhost:${PORT}/api/v1`);
     console.log(`Environment: ${config.NODE_ENV}`);
   });
 
