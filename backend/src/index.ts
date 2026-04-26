@@ -9,6 +9,8 @@ import { seedSuperAdmin } from './core/super-admin-seeder.js';
 import { globalLimiter, authLimiter, aiLimiter } from './middleware/rate-limit.js';
 import authRoutes from './core/auth/routes.js';
 import authAdminRoutes from './core/auth/admin-routes.js';
+import userRoutes from './core/users/routes.js';
+import userImportRoutes from './core/users/import-routes.js';
 import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
@@ -36,6 +38,8 @@ async function startServer() {
 
   apiRouter.use('/auth', authRoutes);
   apiRouter.use('/admin/users', authAdminRoutes);
+  apiRouter.use('/users', userRoutes);
+  apiRouter.use('/users/import', userImportRoutes);
 
   app.use('/api/v1', apiRouter);
 
