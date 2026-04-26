@@ -7,6 +7,8 @@ import { config } from './config/env.js';
 import { runMigrations } from './core/migration-runner.js';
 import { seedSuperAdmin } from './core/super-admin-seeder.js';
 import { globalLimiter, authLimiter, aiLimiter } from './middleware/rate-limit.js';
+import authRoutes from './core/auth/routes.js';
+import authAdminRoutes from './core/auth/admin-routes.js';
 import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
@@ -31,6 +33,9 @@ async function startServer() {
   apiRouter.get('/health', (req, res) => {
     sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  apiRouter.use('/auth', authRoutes);
+  apiRouter.use('/admin/users', authAdminRoutes);
 
   app.use('/api/v1', apiRouter);
 
