@@ -5,11 +5,13 @@ import helmet from 'helmet';
 import { errorHandler } from './middleware/error-handler.js';
 import { config } from './config/env.js';
 import { runMigrations } from './core/migration-runner.js';
+import { seedSuperAdmin } from './core/super-admin-seeder.js';
 import { globalLimiter, authLimiter, aiLimiter } from './middleware/rate-limit.js';
 import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
   await runMigrations();
+  await seedSuperAdmin();
 
   const app = express();
 
