@@ -29,11 +29,14 @@ import {
   DeleteOutlined,
   DatabaseOutlined,
   PlusOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { importApi, type ColumnMapping, type TransformType, type UploadResult, type PreviewResult, type ExecuteResult } from '../../core/api/import';
 import { schemaApi, type DynamicTable, type DynamicField } from '../../core/api/schema';
+import AiSuggestionModal from './AiSuggestionModal';
+import type { TableSuggestion } from '../../core/api/ai';
 
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
@@ -70,6 +73,8 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
   const [newTableDisplayName, setNewTableDisplayName] = useState('');
   const [newTableDescription, setNewTableDescription] = useState('');
   const [newTableIsUserLinked, setNewTableIsUserLinked] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiFields, setAiFields] = useState<Map<string, { fieldType: string; displayName: string; isRequired: boolean; configJson?: Record<string, unknown> }>>(new Map());
 
   const { data: tablesData } = useQuery({
     queryKey: ['schema-tables'],
@@ -219,6 +224,45 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
     setNewTableDisplayName('');
     setNewTableDescription('');
     setNewTableIsUserLinked(false);
+    setAiFields(new Map());
+  };
+
+  const handleApplyAiSuggestion = (suggestion: TableSuggestion) => {
+    setImportMode('new');
+    setNewTableName(suggestion.tableName);
+    setNewTableDisplayName(suggestion.displayName);
+    setNewTableDescription(suggestion.description);
+    setNewTableIsUserLinked(suggestion.isUserLinked);
+
+    const aiFieldMap = new Map<string, { fieldType: string; displayName: string; isRequired: boolean; configJson?: Record<string, unknown> }>();
+    suggestion.fields.forEach((field) => {
+      aiFieldMap.set(field.name, {
+        fieldType: field.fieldType,
+        displayName: field.displayName,
+        isRequired: field.isRequired,
+        configJson: field.configJson as Record<string, unknown> | undefined,
+      });
+    });
+    setAiFields(aiFieldMap);
+
+    const aiMappings: ColumnMapping[] = suggestion.fields.map((field) => {
+      const sourceColumn = uploadResult?.columns.find((col) => {
+        const normalizedCol = col.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        return normalizedCol === field.name || col.toLowerCase() === field.displayName.toLowerCase();
+      }) || field.name;
+      return {
+        sourceColumn,
+        targetField: field.name,
+        transform: undefined,
+        fieldType: field.fieldType,
+        displayName: field.displayName,
+        isRequired: field.isRequired,
+        configJson: field.configJson as Record<string, unknown> | undefined,
+      };
+    });
+
+    setMappings(aiMappings);
+    message.success('AI suggestion applied. Review and edit as needed.');
   };
 
   const uploadProps: UploadProps = {
@@ -332,11 +376,21 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
               <DatabaseOutlined style={{ marginRight: 6 }} />
               Existing Table
             </Radio.Button>
-            <Radio.Button value="new">
-              <PlusOutlined style={{ marginRight: 6 }} />
-              Create New Table
-            </Radio.Button>
-          </Radio.Group>
+          <Radio.Button value="new">
+            <PlusOutlined style={{ marginRight: 6 }} />
+            Create New Table
+          </Radio.Button>
+        </Radio.Group>
+
+        {importMode === 'new' && uploadResult && (
+          <Button
+            icon={<RobotOutlined />}
+            onClick={() => setAiModalOpen(true)}
+            style={{ marginLeft: 12 }}
+          >
+            Auto-generate with AI
+          </Button>
+        )}
 
           {importMode === 'existing' ? (
             <div>
@@ -431,16 +485,24 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
                   title: 'Target Field',
                   key: 'targetField',
                   width: 220,
-                  render: (_: unknown, record: ColumnMapping) => (
-                    importMode === 'new' ? (
-                      <Input
-                        placeholder="field_name"
-                        value={record.targetField}
-                        onChange={(e) =>
-                          handleMappingChange(record.sourceColumn, 'targetField', e.target.value)
-                        }
-                      />
-                    ) : (
+          render: (_: unknown, record: ColumnMapping) => (
+            importMode === 'new' ? (
+              <Space>
+                <Input
+                  placeholder="field_name"
+                  value={record.targetField}
+                  onChange={(e) =>
+                    handleMappingChange(record.sourceColumn, 'targetField', e.target.value)
+                  }
+                  style={{ width: 130 }}
+                />
+                {aiFields.size > 0 && aiFields.get(record.targetField) && (
+                  <Tag color="purple" style={{ fontSize: 11 }}>
+                    {aiFields.get(record.targetField)!.fieldType}
+                  </Tag>
+                )}
+              </Space>
+            ) : (
                       <Select
                         allowClear
                         placeholder="Select field..."
@@ -731,6 +793,15 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
           )}
         </Space>
       </div>
+
+      {uploadResult && (
+        <AiSuggestionModal
+          open={aiModalOpen}
+          fileId={uploadResult.id}
+          onCancel={() => setAiModalOpen(false)}
+          onApply={handleApplyAiSuggestion}
+        />
+      )}
     </div>
   );
 }

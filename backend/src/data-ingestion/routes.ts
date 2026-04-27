@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/rbac.js';
 import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
+import { fieldTypes } from '../schema-engine/service.js';
 import {
   createImport,
   getImport,
@@ -217,6 +218,10 @@ const previewSchema = z.object({
     sourceColumn: z.string(),
     targetField: z.string(),
     transform: z.enum(['uppercase', 'lowercase', 'trim', 'date_iso', 'date_fr', 'number', 'boolean']).optional(),
+    fieldType: z.string().optional(),
+    displayName: z.string().optional(),
+    isRequired: z.boolean().optional(),
+    configJson: z.record(z.unknown()).optional(),
   })),
 });
 
@@ -268,6 +273,10 @@ const executeSchema = z.object({
     sourceColumn: z.string(),
     targetField: z.string(),
     transform: z.enum(['uppercase', 'lowercase', 'trim', 'date_iso', 'date_fr', 'number', 'boolean']).optional(),
+    fieldType: z.string().optional(),
+    displayName: z.string().optional(),
+    isRequired: z.boolean().optional(),
+    configJson: z.record(z.unknown()).optional(),
   })),
   skipDuplicates: z.boolean().default(false),
 });
@@ -381,6 +390,10 @@ const createTableAndImportSchema = z.object({
     sourceColumn: z.string(),
     targetField: z.string(),
     transform: z.enum(['uppercase', 'lowercase', 'trim', 'date_iso', 'date_fr', 'number', 'boolean']).optional(),
+    fieldType: z.string().optional(),
+    displayName: z.string().optional(),
+    isRequired: z.boolean().optional(),
+    configJson: z.record(z.unknown()).optional(),
   })),
 });
 
@@ -391,69 +404,117 @@ router.post(
   validate({ body: createTableAndImportSchema }),
   async (req, res, next) => {
     try {
-      const { fileId, tableName, displayName, description, isUserLinked, mappings } = req.body;
+        const { fileId, tableName, displayName, description, isUserLinked, mappings } = req.body as {
+          fileId: string;
+          tableName: string;
+          displayName: string;
+          description?: string;
+          isUserLinked: boolean;
+          mappings: Array<{
+            sourceColumn: string;
+            targetField: string;
+            transform?: string;
+            fieldType?: string;
+            displayName?: string;
+            isRequired?: boolean;
+            configJson?: Record<string, unknown>;
+          }>;
+        };
 
-      const { createTable } = await import('../schema-engine/service.js');
+        const { createTable, addField, listFields, insertData } = await import('../schema-engine/service.js');
 
-      const table = await createTable({
-        name: tableName,
-        displayName,
-        description,
-        isUserLinked,
-        createdBy: req.user!.id,
-      });
+        const table = await createTable({
+          name: tableName,
+          displayName,
+          description,
+          isUserLinked,
+          createdBy: req.user!.id,
+        });
 
-      await updateImportStatus(fileId, 'processing');
+        const uniqueTargetFields = [...new Set(mappings.map(m => m.targetField))];
+        const fieldMapByTarget = new Map<string, Record<string, any>>(mappings.map(m => [m.targetField, m as Record<string, any>]));
+        for (let i = 0; i < uniqueTargetFields.length; i++) {
+          const fieldName = uniqueTargetFields[i];
+          const mappingEntry = fieldMapByTarget.get(fieldName);
+          const entryFieldType: string | undefined = mappingEntry?.fieldType;
+          const fieldType = (entryFieldType && fieldTypes.includes(entryFieldType as typeof fieldTypes[number]))
+            ? entryFieldType as typeof fieldTypes[number]
+            : 'text' as typeof fieldTypes[number];
+          const entryDisplayName: string | undefined = mappingEntry?.displayName;
+          await addField({
+            tableId: table.id,
+            name: fieldName,
+            displayName: entryDisplayName || fieldName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            fieldType,
+            isRequired: mappingEntry?.isRequired || false,
+            configJson: mappingEntry?.configJson,
+            orderIndex: i + 1,
+          });
+        }
 
-      const importFile = await getImport(fileId);
-      const filePath = path.join(uploadDir, importFile.filename);
+        await updateImportStatus(fileId, 'processing');
 
-      let allRows: Record<string, unknown>[] = [];
+        const importFile = await getImport(fileId);
+        const filePath = path.join(uploadDir, importFile.filename);
 
-      if (importFile.file_type === 'csv') {
-        allRows = await parseAllCSV(filePath);
-      } else if (importFile.file_type === 'excel') {
-        allRows = await parseAllExcel(filePath);
-      } else if (importFile.file_type === 'json') {
-        const parsed = await parseJSON(filePath);
-        allRows = parsed.sampleRows;
-      }
+        let allRows: Record<string, unknown>[] = [];
 
-      const { listFields, insertData } = await import('../schema-engine/service.js');
-      const targetFields = await listFields(table.id);
-      const fieldMap = new Map(targetFields.map(f => [f.name, f]));
+        if (importFile.file_type === 'csv') {
+          allRows = await parseAllCSV(filePath);
+        } else if (importFile.file_type === 'excel') {
+          allRows = await parseAllExcel(filePath);
+        } else if (importFile.file_type === 'json') {
+          const parsed = await parseJSON(filePath);
+          allRows = parsed.sampleRows;
+        }
 
-      let importedCount = 0;
-      const errors: { row: number; error: string }[] = [];
+        const targetFields = await listFields(table.id);
+        const fieldMap = new Map(targetFields.map(f => [f.name, f]));
 
-      for (let i = 0; i < allRows.length; i++) {
-        const sourceRow = allRows[i];
-        const mappedData: Record<string, unknown> = {};
+        let importedCount = 0;
+        const errors: { row: number; error: string }[] = [];
+        const batchSize = 100;
+        let batch: Record<string, unknown>[] = [];
 
-        try {
-          for (const mapping of mappings) {
-            const sourceValue = sourceRow[mapping.sourceColumn];
-            const transformedValue = applyTransform(sourceValue, mapping.transform);
-            const targetField = fieldMap.get(mapping.targetField);
+        for (let i = 0; i < allRows.length; i++) {
+          const sourceRow = allRows[i];
+          const mappedData: Record<string, unknown> = {};
 
-            if (targetField) {
-              mappedData[mapping.targetField] = transformedValue;
+          try {
+            for (const mapping of mappings) {
+              const sourceValue = sourceRow[mapping.sourceColumn];
+              const transformedValue = applyTransform(sourceValue, mapping.transform);
+              const targetField = fieldMap.get(mapping.targetField);
 
-              const error = validateValue(transformedValue, targetField);
-              if (error) {
-                throw new Error(`Row ${i + 1}: ${error}`);
+              if (targetField) {
+                mappedData[mapping.targetField] = transformedValue;
+
+                const error = validateValue(transformedValue, targetField);
+                if (error) {
+                  throw new Error(`Row ${i + 1}: ${error}`);
+                }
               }
             }
+
+            if (Object.keys(mappedData).length > 0) {
+              batch.push(mappedData);
+            }
+          } catch (err: any) {
+            errors.push({ row: i + 1, error: err.message });
           }
 
-          if (Object.keys(mappedData).length > 0) {
-            await insertData(table.id, mappedData);
-            importedCount++;
+          if ((i + 1) % batchSize === 0 || i === allRows.length - 1) {
+            for (const data of batch) {
+              try {
+                await insertData(table.id, data);
+                importedCount++;
+              } catch (err: any) {
+                errors.push({ row: i + 1, error: err.message });
+              }
+            }
+            batch = [];
           }
-        } catch (err: any) {
-          errors.push({ row: i + 1, error: err.message });
         }
-      }
 
       await recordImportErrors(fileId, importedCount, errors.length, errors);
       await updateImportStatus(fileId, importedCount > 0 ? 'completed' : 'failed');

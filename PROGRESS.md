@@ -5,7 +5,7 @@
 **Total Phases:** 11
 **Completed Phases:** 2
 **Total Issues:** 62
-**Completed Issues:** 14
+**Completed Issues:** 15
 **In Progress:** Phase 4
 
 ---
@@ -55,7 +55,7 @@
 | 18 | Implement import mapping and validation API | ✅ Done | 2026-04-27 |
 | 19 | Implement import execution API | ✅ Done | 2026-04-27 |
 | 20 | Build data import wizard frontend | ✅ Done | 2026-04-27 |
-| 21 | Implement AI-assisted table creation from import | 🔄 Pending | — |
+| 21 | Implement AI-assisted table creation from import | ✅ Done | 2026-04-27 |
 
 ---
 
@@ -148,15 +148,31 @@
 | Component | TypeScript | Builds | Runs |
 |-----------|-----------|--------|------|
 | Backend | ✅ Clean | ✅ Clean | ✅ Working |
-| Frontend | ✅ Clean | ✅ Clean | Pending |
+| Frontend | ✅ Clean | ✅ Clean | ✅ Working |
 
 **Backend startup verified:** Migrations run, super admin seeded, health endpoints respond.
+**Frontend startup verified:** Vite build succeeds, nginx serves on port 3000.
 
 ---
 
 *Last updated: 2026-04-27*
 
-## Issue 20: Build data import wizard frontend — Completed 2026-04-27
+## Issue 21: Implement AI-assisted table creation from import — Completed 2026-04-27
+
+Implemented Groq-powered AI table suggestion feature with:
+- Backend: `POST /api/v1/ai/import/suggest-table` endpoint that sends file schema (columns + sample data) to Groq API
+- AI service (`backend/src/ai-services/`) with carefully engineered system prompt for database schema design
+- Groq returns suggested table structure: table name, display name, description, isUserLinked flag, and fields with types/display names/required flags
+- Frontend AI API client (`web-frontend/src/core/api/ai.ts`) with `suggestTable()` method
+- `AiSuggestionModal` component with review/edit UI: editable table name, display name, description, user-linked toggle, and per-field editing (name, display name, type, required, remove)
+- "Auto-generate with AI" button in ImportWizard's "Create New Table" mode
+- AI suggestion auto-populates mapping table with field type tags shown alongside field names
+- Human confirmation required before AI suggestion is applied (never auto-persists)
+- AI rate limiting (50 requests/hour) applied to all `/api/v1/ai/*` routes
+- Fixed critical bug in `create-table-and-import` route: fields are now actually created as columns before data insertion
+- Added field type metadata support in import mapping schema (fieldType, displayName, isRequired, configJson)
+- Activity logging for AI suggest actions
+- Robust error handling for missing GROQ_API_KEY and invalid AI responses
 
 Implemented 5-step data import wizard with:
 - Step 1: Drag-and-drop file upload (CSV, Excel, JSON) with format/size info

@@ -18,6 +18,10 @@ export interface ColumnMapping {
   sourceColumn: string;
   targetField: string;
   transform?: TransformType;
+  fieldType?: string;
+  displayName?: string;
+  isRequired?: boolean;
+  configJson?: Record<string, unknown>;
 }
 
 export interface PreviewResult {

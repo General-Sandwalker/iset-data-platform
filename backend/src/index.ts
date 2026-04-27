@@ -13,6 +13,7 @@ import userRoutes from './core/users/routes.js';
 import userImportRoutes from './core/users/import-routes.js';
 import schemaRoutes from './schema-engine/routes.js';
 import importRoutes from './data-ingestion/routes.js';
+import aiRoutes from './ai-services/routes.js';
 import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
@@ -43,7 +44,8 @@ apiRouter.use('/admin/users', authAdminRoutes);
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/users/import', userImportRoutes);
 apiRouter.use('/schema', schemaRoutes);
-apiRouter.use('/import', importRoutes);
+  apiRouter.use('/import', importRoutes);
+  apiRouter.use('/ai', aiLimiter, aiRoutes);
 
   app.use('/api/v1', apiRouter);
 
