@@ -12,6 +12,7 @@ import authAdminRoutes from './core/auth/admin-routes.js';
 import userRoutes from './core/users/routes.js';
 import userImportRoutes from './core/users/import-routes.js';
 import schemaRoutes from './schema-engine/routes.js';
+import importRoutes from './data-ingestion/routes.js';
 import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
@@ -42,6 +43,7 @@ apiRouter.use('/admin/users', authAdminRoutes);
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/users/import', userImportRoutes);
 apiRouter.use('/schema', schemaRoutes);
+apiRouter.use('/import', importRoutes);
 
   app.use('/api/v1', apiRouter);
 
