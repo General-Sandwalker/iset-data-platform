@@ -136,6 +136,50 @@ async function parseCSV(filePath: string): Promise<ParsedFileResult> {
   }
 }
 
+async function parseAllCSV(filePath: string): Promise<Record<string, unknown>[]> {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const rows: Record<string, unknown>[] = [];
+  const lines = content.split('\n');
+  let headers: string[] = [];
+
+  const parseLine = (lineStr: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let j = 0; j < lineStr.length; j++) {
+      const char = lineStr[j];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    if (i === 0) {
+      headers = parseLine(line);
+    } else {
+      const values = parseLine(line);
+      const row: Record<string, unknown> = {};
+      for (let j = 0; j < headers.length; j++) {
+        row[headers[j]] = values[j] || '';
+      }
+      rows.push(row);
+    }
+  }
+
+  return rows;
+}
+
 async function parseExcel(filePath: string): Promise<ParsedFileResult> {
   const workbook = XLSX.readFile(filePath);
   const sheetName = workbook.SheetNames[0];
@@ -149,6 +193,13 @@ async function parseExcel(filePath: string): Promise<ParsedFileResult> {
     sampleRows: rows.slice(0, 10) as Record<string, unknown>[],
     totalRows: rows.length,
   };
+}
+
+async function parseAllExcel(filePath: string): Promise<Record<string, unknown>[]> {
+  const workbook = XLSX.readFile(filePath);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  return XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: null });
 }
 
 async function parseJSON(filePath: string): Promise<ParsedFileResult> {
@@ -453,4 +504,4 @@ async function readAllRows(file: ImportFile): Promise<Record<string, unknown>[]>
   return [];
 }
 
-export { ensureUploadDir, detectFileType, generateFileId, UPLOAD_DIR, parseCSV, parseExcel, parseJSON, applyTransform, validateValue };
+export { ensureUploadDir, detectFileType, generateFileId, UPLOAD_DIR, parseCSV, parseAllCSV, parseExcel, parseAllExcel, parseJSON, applyTransform, validateValue };

@@ -32,10 +32,8 @@ function ThemedApp() {
   };
 
   React.useEffect(() => {
-    document.documentElement.setAttribute(
-      'data-theme',
-      isDarkMode ? 'dark' : 'light'
-    );
+    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+    document.documentElement.style.colorScheme = isDarkMode ? 'dark' : 'light';
   }, [isDarkMode]);
 
   return (

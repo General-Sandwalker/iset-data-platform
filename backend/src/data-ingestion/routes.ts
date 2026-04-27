@@ -19,9 +19,13 @@ import {
   generateFileId,
   UPLOAD_DIR,
   parseCSV,
+  parseAllCSV,
   parseExcel,
+  parseAllExcel,
   parseJSON,
   previewImport,
+  applyTransform,
+  validateValue,
   type ParsedFileResult,
   type ColumnMapping,
 } from './service.js';
@@ -279,14 +283,15 @@ router.post(
 
       const importFile = await getImport(fileId);
       const filePath = path.join(uploadDir, importFile.filename);
+
+      await updateImportStatus(fileId, 'processing');
+
       let allRows: Record<string, unknown>[] = [];
 
       if (importFile.file_type === 'csv') {
-        const parsed = await parseCSV(filePath);
-        allRows = parsed.sampleRows;
+        allRows = await parseAllCSV(filePath);
       } else if (importFile.file_type === 'excel') {
-        const parsed = await parseExcel(filePath);
-        allRows = parsed.sampleRows;
+        allRows = await parseAllExcel(filePath);
       } else if (importFile.file_type === 'json') {
         const parsed = await parseJSON(filePath);
         allRows = parsed.sampleRows;
@@ -296,7 +301,127 @@ router.post(
       const targetFields = await listFields(tableId);
       const fieldMap = new Map(targetFields.map(f => [f.name, f]));
 
-      const { applyTransform, validateValue } = await import('./service.js');
+      let importedCount = 0;
+      const errors: { row: number; error: string }[] = [];
+      const batchSize = 100;
+      let batch: Record<string, unknown>[] = [];
+
+      for (let i = 0; i < allRows.length; i++) {
+        const sourceRow = allRows[i];
+        const mappedData: Record<string, unknown> = {};
+        let hasError = false;
+
+        try {
+          for (const mapping of mappings) {
+            const sourceValue = sourceRow[mapping.sourceColumn];
+            const transformedValue = applyTransform(sourceValue, mapping.transform);
+            const targetField = fieldMap.get(mapping.targetField);
+
+            if (targetField) {
+              mappedData[mapping.targetField] = transformedValue;
+
+              const error = validateValue(transformedValue, targetField);
+              if (error) {
+                throw new Error(`Row ${i + 1}: ${error}`);
+              }
+            }
+          }
+
+          if (Object.keys(mappedData).length > 0) {
+            batch.push(mappedData);
+          }
+        } catch (err: any) {
+          errors.push({ row: i + 1, error: err.message });
+          hasError = true;
+        }
+
+        if ((i + 1) % batchSize === 0 || i === allRows.length - 1) {
+          for (const data of batch) {
+            try {
+              await insertData(tableId, data);
+              importedCount++;
+            } catch (err: any) {
+              errors.push({ row: i + 1, error: err.message });
+            }
+          }
+          batch = [];
+        }
+      }
+
+      await recordImportErrors(fileId, importedCount, errors.length, errors);
+      await updateImportStatus(fileId, importedCount > 0 ? 'completed' : 'failed');
+
+      await logActivity({
+        userId: req.user!.id,
+        action: 'EXECUTE_IMPORT',
+        entityType: 'import',
+        entityId: fileId,
+        ipAddress: req.ip,
+      });
+
+      sendSuccess(res, {
+        totalRows: allRows.length,
+        importedRows: importedCount,
+        errorCount: errors.length,
+        errors: errors.slice(0, 50),
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+const createTableAndImportSchema = z.object({
+  fileId: z.string().uuid(),
+  tableName: z.string().min(1).regex(/^[a-zA-Z][a-z0-9_]*$/),
+  displayName: z.string().min(1),
+  description: z.string().optional(),
+  isUserLinked: z.boolean().default(false),
+  mappings: z.array(z.object({
+    sourceColumn: z.string(),
+    targetField: z.string(),
+    transform: z.enum(['uppercase', 'lowercase', 'trim', 'date_iso', 'date_fr', 'number', 'boolean']).optional(),
+  })),
+});
+
+router.post(
+  '/create-table-and-import',
+  authenticate,
+  requireAdmin,
+  validate({ body: createTableAndImportSchema }),
+  async (req, res, next) => {
+    try {
+      const { fileId, tableName, displayName, description, isUserLinked, mappings } = req.body;
+
+      const { createTable } = await import('../schema-engine/service.js');
+
+      const table = await createTable({
+        name: tableName,
+        displayName,
+        description,
+        isUserLinked,
+        createdBy: req.user!.id,
+      });
+
+      await updateImportStatus(fileId, 'processing');
+
+      const importFile = await getImport(fileId);
+      const filePath = path.join(uploadDir, importFile.filename);
+
+      let allRows: Record<string, unknown>[] = [];
+
+      if (importFile.file_type === 'csv') {
+        allRows = await parseAllCSV(filePath);
+      } else if (importFile.file_type === 'excel') {
+        allRows = await parseAllExcel(filePath);
+      } else if (importFile.file_type === 'json') {
+        const parsed = await parseJSON(filePath);
+        allRows = parsed.sampleRows;
+      }
+
+      const { listFields, insertData } = await import('../schema-engine/service.js');
+      const targetFields = await listFields(table.id);
+      const fieldMap = new Map(targetFields.map(f => [f.name, f]));
 
       let importedCount = 0;
       const errors: { row: number; error: string }[] = [];
@@ -322,7 +447,7 @@ router.post(
           }
 
           if (Object.keys(mappedData).length > 0) {
-            await insertData(tableId, mappedData);
+            await insertData(table.id, mappedData);
             importedCount++;
           }
         } catch (err: any) {
@@ -335,16 +460,22 @@ router.post(
 
       await logActivity({
         userId: req.user!.id,
-        action: 'EXECUTE_IMPORT',
+        action: 'CREATE_TABLE_AND_IMPORT',
         entityType: 'import',
         entityId: fileId,
         ipAddress: req.ip,
       });
 
       sendSuccess(res, {
+        table: {
+          id: table.id,
+          name: table.name,
+          displayName: table.display_name,
+        },
+        totalRows: allRows.length,
         importedRows: importedCount,
         errorCount: errors.length,
-        errors: errors.slice(0, 20),
+        errors: errors.slice(0, 50),
       });
     } catch (err) {
       next(err);
