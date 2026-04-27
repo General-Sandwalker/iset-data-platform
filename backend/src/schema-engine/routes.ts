@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validate, uuidParam } from '../middleware/validation.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, HttpError } from '../middleware/auth.js';
 import { requireAdmin, requireSuperAdmin } from '../middleware/rbac.js';
 import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
+import { query } from '../config/database.js';
 import {
   createTable, listTables, getTableById, updateTable, deleteTable,
   addField, listFields, getFieldById, updateField, deleteField,
@@ -26,6 +27,7 @@ const createTableSchema = z.object({
 const updateTableSchema = z.object({
   displayName: z.string().min(1).max(255).optional(),
   description: z.string().optional(),
+  isUserLinked: z.boolean().optional(),
 });
 
 const addFieldSchema = z.object({
@@ -203,6 +205,36 @@ router.delete('/tables/:id/data/:recordId', async (req, res, next) => {
     await deleteData(req.params.id, req.params.recordId);
     await logActivity({ userId: req.user!.id, action: 'DELETE_RECORD', entityType: 'dynamic_record', entityId: req.params.recordId, ipAddress: req.ip });
     sendSuccess(res, { message: 'Record deleted' });
+  } catch (err) { next(err); }
+});
+
+router.get('/my-records', authenticate, async (req, res, next) => {
+  try {
+    const userCin = req.user!.cin;
+    if (!userCin) {
+      throw new HttpError(400, 'NO_CIN', 'Your account does not have a CIN linked');
+    }
+
+    const tables = await listTables();
+    const userLinkedTables = tables.filter(t => t.is_user_linked);
+
+    const records: Record<string, any[]> = {};
+
+    for (const table of userLinkedTables) {
+      const result = await query(
+        `SELECT * FROM ${table.name} WHERE cin = $1 ORDER BY created_at DESC`,
+        [userCin]
+      );
+      if (result.rows.length > 0) {
+        records[table.name] = result.rows;
+      }
+    }
+
+    sendSuccess(res, {
+      cin: userCin,
+      tablesCount: Object.keys(records).length,
+      records
+    });
   } catch (err) { next(err); }
 });
 

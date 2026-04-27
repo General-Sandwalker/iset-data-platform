@@ -123,7 +123,8 @@ export async function getTableById(id: string): Promise<DynamicTable> {
   return result.rows[0];
 }
 
-export async function updateTable(id: string, data: { displayName?: string; description?: string }): Promise<DynamicTable> {
+export async function updateTable(id: string, data: { displayName?: string; description?: string; isUserLinked?: boolean }): Promise<DynamicTable> {
+  const table = await getTableById(id);
   const updates: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -131,16 +132,40 @@ export async function updateTable(id: string, data: { displayName?: string; desc
   if (data.displayName !== undefined) { updates.push(`display_name = $${i++}`); values.push(data.displayName); }
   if (data.description !== undefined) { updates.push(`description = $${i++}`); values.push(data.description); }
 
-  if (updates.length === 0) {
-    return getTableById(id);
-  }
+  const client = await getClient();
+  try {
+    if (data.isUserLinked === true && !table.is_user_linked) {
+      updates.push(`is_user_linked = $${i++}`);
+      values.push(true);
+      await client.query('BEGIN');
+      try {
+        const cinCheck = await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND column_name = 'cin'`, [table.name]);
+        if (cinCheck.rows.length === 0) {
+          await client.query(`ALTER TABLE ${table.name} ADD COLUMN cin VARCHAR(20)`);
+        }
+      } catch {}
+    } else if (data.isUserLinked !== undefined) {
+      updates.push(`is_user_linked = $${i++}`);
+      values.push(data.isUserLinked);
+    }
 
-  values.push(id);
-  const result = await query<DynamicTable>(
-    `UPDATE dynamic_tables SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`,
-    values
-  );
-  return result.rows[0];
+    if (updates.length === 0) {
+      return getTableById(id);
+    }
+
+    values.push(id);
+    const result = await client.query<DynamicTable>(
+      `UPDATE dynamic_tables SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`,
+      values
+    );
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function deleteTable(id: string): Promise<void> {
@@ -502,7 +527,7 @@ interface DataListResult<T = any> {
   limit: number;
 }
 
-function validateValueAgainstField(value: any, field: DynamicField): string | null {
+async function validateValueAgainstField(value: any, field: DynamicField): Promise<string | null> {
   if (value === null || value === undefined) {
     if (field.is_required) {
       return `Field "${field.display_name}" is required`;
@@ -556,6 +581,17 @@ function validateValueAgainstField(value: any, field: DynamicField): string | nu
             return `Each value in "${field.display_name}" must be one of: ${opts.join(', ')}`;
           }
         }
+      }
+      break;
+    }
+    case 'user_link': {
+      const cinValue = String(value);
+      if (!/^[0-9]{8}$/.test(cinValue)) {
+        return `Field "${field.display_name}" must be a valid CIN (8 digits)`;
+      }
+      const userExists = await query('SELECT id FROM users WHERE cin = $1', [cinValue]);
+      if (userExists.rows.length === 0) {
+        return `Field "${field.display_name}": No user found with CIN ${cinValue}`;
       }
       break;
     }
@@ -648,7 +684,7 @@ export async function insertData(
   const fieldMap = new Map(fields.map(f => [f.name, f]));
 
   for (const [name, field] of fieldMap) {
-    const error = validateValueAgainstField(input[name], field);
+    const error = await validateValueAgainstField(input[name], field);
     if (error) throw new HttpError(400, 'VALIDATION_ERROR', error);
   }
 
@@ -711,7 +747,7 @@ export async function updateData(
 
   for (const [fieldName, field] of fieldMap) {
     if (input[fieldName] !== undefined) {
-      const error = validateValueAgainstField(input[fieldName], field);
+      const error = await validateValueAgainstField(input[fieldName], field);
       if (error) throw new HttpError(400, 'VALIDATION_ERROR', error);
     }
   }

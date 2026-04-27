@@ -17,21 +17,21 @@ import {
   EditOutlined,
   DeleteOutlined,
   EyeOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { schemaApi, type DynamicTable } from '../../core/api/schema';
-import { useNavigate } from 'react-router-dom';
 
 const { Title, Text } = Typography;
 
 interface TableListProps {
   onCreateNew?: () => void;
   onViewTable?: (table: DynamicTable) => void;
+  onOpenSettings?: (table: DynamicTable) => void;
 }
 
-export default function TableList({ onCreateNew, onViewTable }: TableListProps) {
+export default function TableList({ onCreateNew, onViewTable, onOpenSettings }: TableListProps) {
   const { token } = theme.useToken();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -122,6 +122,14 @@ export default function TableList({ onCreateNew, onViewTable }: TableListProps) 
             }}
             styles={{ body: { padding: 16 } }}
             actions={[
+              <Button
+                key="settings"
+                type="text"
+                icon={<SettingOutlined />}
+                onClick={() => onOpenSettings?.(table)}
+              >
+                Settings
+              </Button>,
               <Button
                 key="view"
                 type="text"

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   Typography,
@@ -14,7 +14,7 @@ import {
   Tag,
   theme,
   Tooltip,
-  Dropdown,
+  Avatar,
 } from 'antd';
 import {
   SearchOutlined,
@@ -22,12 +22,13 @@ import {
   EditOutlined,
   DeleteOutlined,
   DownloadOutlined,
-  FilterOutlined,
+  UserOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TableProps } from 'antd';
 import { schemaApi, type DynamicTable, type DynamicField, type DataRecord, type FieldType } from '../../core/api/schema';
+import { apiClient } from '../../core/api/client';
 
 const { Title, Text } = Typography;
 
@@ -64,6 +65,7 @@ export default function DataBrowser({ table, onClose }: DataBrowserProps) {
   const [selectedRecord, setSelectedRecord] = useState<DataRecord | null>(null);
   const [form] = Form.useForm();
   const [selectedFields, setSelectedFields] = useState<DynamicField[]>([]);
+  const [userInfoCache, setUserInfoCache] = useState<Record<string, { first_name: string; last_name: string; email: string }>>({});
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['schema-table-data', table.id, { page, limit, search, sortBy, sortOrder }],
@@ -88,6 +90,50 @@ export default function DataBrowser({ table, onClose }: DataBrowserProps) {
       setSelectedFields(fieldsData.data.fields);
     }
   }, [fieldsData]);
+
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      const records = data?.data || [];
+      const cinFields = selectedFields.filter(f => f.field_type === 'user_link');
+
+      if (cinFields.length === 0) return;
+
+      const cinsToFetch = new Set<string>();
+      for (const record of records) {
+        for (const field of cinFields) {
+          const cin = String(record[field.name] ?? '');
+          if (cin && !userInfoCache[cin]) {
+            cinsToFetch.add(cin);
+          }
+        }
+      }
+
+      if (cinsToFetch.size === 0) return;
+
+      try {
+        const response = await apiClient.get('/users', {
+          params: {
+            cin: Array.from(cinsToFetch).join(','),
+            limit: 100,
+          },
+        });
+        const users = response.data?.data || [];
+        const newCache: Record<string, { first_name: string; last_name: string; email: string }> = {};
+        for (const user of users) {
+          if (user.cin) {
+            newCache[user.cin] = {
+              first_name: user.first_name,
+              last_name: user.last_name,
+              email: user.email,
+            };
+          }
+        }
+        setUserInfoCache(prev => ({ ...prev, ...newCache }));
+      } catch {}
+    };
+
+    fetchUserInfo();
+  }, [data, selectedFields]);
 
   const insertMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => schemaApi.insertData(table.id, data),
@@ -237,6 +283,29 @@ export default function DataBrowser({ table, onClose }: DataBrowserProps) {
           return <a href={`mailto:${value}`}>{String(value)}</a>;
         case 'phone':
           return <a href={`tel:${value}`}>{String(value)}</a>;
+        case 'user_link': {
+          const cin = String(value);
+          const userInfo = userInfoCache[cin];
+          if (userInfo) {
+            return (
+              <Space>
+                <Avatar size="small" icon={<UserOutlined />} />
+                <Text>
+                  {userInfo.first_name} {userInfo.last_name}
+                </Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  ({userInfo.email})
+                </Text>
+              </Space>
+            );
+          }
+          return (
+            <Space>
+              <UserOutlined />
+              <Text>{cin}</Text>
+            </Space>
+          );
+        }
         default:
           return String(value);
       }

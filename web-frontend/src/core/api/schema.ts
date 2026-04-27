@@ -52,6 +52,7 @@ export interface CreateTableInput {
 export interface UpdateTableInput {
   displayName?: string;
   description?: string;
+  isUserLinked?: boolean;
 }
 
 export interface CreateFieldInput {
@@ -184,6 +185,11 @@ export const schemaApi = {
 
   async deleteData(tableId: string, recordId: string): Promise<ApiResponse<{ message: string }>> {
     const response = await apiClient.delete(`/schema/tables/${tableId}/data/${recordId}`);
+    return response.data;
+  },
+
+  async getMyRecords(): Promise<ApiResponse<{ cin: string; tablesCount: number; records: Record<string, DataRecord[]> }>> {
+    const response = await apiClient.get('/schema/my-records');
     return response.data;
   },
 };

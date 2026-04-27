@@ -276,218 +276,9 @@ Update user details.
 **Request Body (all fields optional):**
 ```json
 {
-  "email": "newemail@example.com",
-  "firstName": "Jane",
-  "lastName": "Smith",
-  "role": "alumni",
-  "phone": "+216 XX XXX XXX",
-  "isActive": false
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "cin": "12345678",
-    "email": "newemail@example.com",
-    "firstName": "Jane",
-    "lastName": "Smith",
-    "role": "alumni",
-    "phone": "+216 XX XXX XXX",
-    "isActive": false
-  }
-}
-```
-
----
-
-### DELETE `/users/:id`
-
-Delete a user (admin only, cannot delete super_admin).
-
-**Headers:** `Authorization: Bearer <token>`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": { "message": "User deleted" }
-}
-```
-
-**Errors:**
-- `CANNOT_DELETE_SUPER_ADMIN` - Cannot delete super admin account
-
----
-
-### POST `/users/:id/reset-password`
-
-Reset a user's password (admin only).
-
-**Headers:** `Authorization: Bearer <token>`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "tempPassword": "aB3#xY7$"
-  }
-}
-```
-
----
-
-### POST `/users/import`
-
-Bulk import users from CSV/Excel file.
-
-**Headers:** `Authorization: Bearer <token>`
-**Content-Type:** `multipart/form-data`
-
-**Form Fields:**
-- `file` - CSV/Excel file with columns: cin, email, firstName, lastName, role, phone
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "imported": 45,
-    "failed": 2,
-    "errors": [
-      { "row": 5, "cin": "00000000", "error": "Invalid CIN format" }
-    ]
-  }
-}
-```
-
----
-
-## Schema Engine API
-
-Dynamic table, field, relationship, and data management.
-
-### GET `/schema/tables`
-
-List all dynamic tables.
-
-**Headers:** `Authorization: Bearer <token>`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid",
-      "name": "dt_students",
-      "displayName": "Students",
-      "description": "Student records",
-      "isUserLinked": true,
-      "createdBy": "admin-uuid",
-      "createdAt": "2026-04-26T00:00:00.000Z"
-    }
-  ]
-}
-```
-
----
-
-### POST `/schema/tables`
-
-Create a new dynamic table.
-
-**Headers:** `Authorization: Bearer <token>` (admin role required)
-
-**Request Body:**
-```json
-{
-  "name": "students",
-  "displayName": "Students",
-  "description": "Student records",
-  "isUserLinked": true
-}
-```
-
-**Response (201):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "dt_students",
-    "displayName": "Students",
-    "description": "Student records",
-    "isUserLinked": true,
-    "createdAt": "2026-04-26T00:00:00.000Z"
-  }
-}
-```
-
-**Notes:**
-- Table name will be prefixed with `dt_`
-- If `isUserLinked` is true, a `cin` column is automatically added
-- Name must start with a letter and contain only letters, numbers, underscores
-
----
-
-### GET `/schema/tables/:id`
-
-Get table details with fields.
-
-**Headers:** `Authorization: Bearer <token>`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "dt_students",
-    "displayName": "Students",
-    "description": "Student records",
-    "isUserLinked": true,
-    "fields": [
-      {
-        "id": "uuid",
-        "name": "first_name",
-        "displayName": "First Name",
-        "fieldType": "text",
-        "configJson": {},
-        "isRequired": true,
-        "orderIndex": 0
-      },
-      {
-        "id": "uuid",
-        "name": "birth_date",
-        "displayName": "Birth Date",
-        "fieldType": "date",
-        "configJson": {},
-        "isRequired": false,
-        "orderIndex": 1
-      }
-    ]
-  }
-}
-```
-
----
-
-### PATCH `/schema/tables/:id`
-
-Update table metadata (display name, description only).
-
-**Headers:** `Authorization: Bearer <token>` (admin role required)
-
-**Request Body:**
-```json
-{
   "displayName": "Student Records",
-  "description": "Updated description"
+  "description": "Updated description",
+  "isUserLinked": true
 }
 ```
 
@@ -499,12 +290,16 @@ Update table metadata (display name, description only).
     "id": "uuid",
     "name": "dt_students",
     "displayName": "Student Records",
-    "description": "Updated description"
+    "description": "Updated description",
+    "isUserLinked": true
   }
 }
 ```
 
-**Note:** Table name cannot be changed after creation to preserve data.
+**Notes:**
+- Setting `isUserLinked` to `true` automatically adds a `cin` column to the table if not present
+- Setting `isUserLinked` to `false` keeps the column but unlinks the table
+- Table name cannot be changed after creation to preserve data
 
 ---
 
@@ -874,6 +669,47 @@ Delete a record from a table.
   "data": { "message": "Record deleted" }
 }
 ```
+
+---
+
+### GET `/schema/my-records`
+
+Get all records linked to the current user's CIN across all user-linked tables. Use this for student/alumni portals to fetch their data.
+
+**Headers:** `Authorization: Bearer <token>` (requires CIN in users table)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "cin": "12345678",
+    "tablesCount": 2,
+    "records": {
+      "dt_grades": [
+        {
+          "id": "uuid",
+          "cin": "12345678",
+          "course": "Mathematics",
+          "grade": 15,
+          "created_at": "2026-04-26T00:00:00.000Z"
+        }
+      ],
+      "dt_attendance": [
+        {
+          "id": "uuid",
+          "cin": "12345678",
+          "date": "2026-04-25",
+          "present": true
+        }
+      ]
+    }
+  }
+}
+```
+
+**Errors:**
+- `NO_CIN` - Account does not have a CIN linked
 
 ---
 

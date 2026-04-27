@@ -43,7 +43,7 @@
 | 13 | Implement dynamic relationships API | ✅ Done | 2026-04-27 |
 | 14 | Implement generic dynamic data API | ✅ Done | 2026-04-27 |
 | 15 | Build visual database manager UI | ✅ Done | 2026-04-27 |
-| 16 | Implement user linking in visual editor | 🔄 Pending | — |
+| 16 | Implement user linking in visual editor | ✅ Done | 2026-04-27 |
 
 ---
 
@@ -155,3 +155,11 @@
 ---
 
 *Last updated: 2026-04-27*
+
+## Issue 15: Build visual database manager UI — Completed 2026-04-27
+
+Implemented visual database manager with:
+- Table list card grid
+- 3-step table creator wizard
+- Visual relationship editor with canvas
+- Data browser with CRUD, sorting, filtering, CSV export
