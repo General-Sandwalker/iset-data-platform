@@ -713,6 +713,238 @@ Get all records linked to the current user's CIN across all user-linked tables. 
 
 ---
 
+## Import API
+
+All import endpoints require authentication and admin role.
+
+### POST `/import/upload`
+
+Upload a file for import. Parses CSV, Excel, or JSON and returns column info with sample rows.
+
+**Headers:** `Authorization: Bearer <token>` (admin role required)
+**Content-Type:** `multipart/form-data`
+
+**Form Data:**
+| Field | Type | Description |
+|-------|------|-------------|
+| file | File | CSV, Excel (.xlsx/.xls), or JSON file (max 50MB) |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "filename": "students.csv",
+    "fileType": "csv",
+    "fileSize": 10240,
+    "columns": ["first_name", "last_name", "email", "cin"],
+    "sampleRows": [
+      { "first_name": "John", "last_name": "Doe", "email": "john@example.com", "cin": "12345678" }
+    ],
+    "totalRows": 150
+  }
+}
+```
+
+---
+
+### POST `/import/preview`
+
+Preview mapped data with validation results before executing import.
+
+**Headers:** `Authorization: Bearer <token>` (admin role required)
+
+**Request Body:**
+```json
+{
+  "fileId": "uuid",
+  "tableId": "uuid",
+  "mappings": [
+    { "sourceColumn": "First Name", "targetField": "first_name", "transform": "trim" },
+    { "sourceColumn": "Email", "targetField": "email", "transform": "lowercase" }
+  ]
+}
+```
+
+**Transform Options:** `uppercase`, `lowercase`, `trim`, `date_iso`, `date_fr`, `number`, `boolean`
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "validRows": [
+      { "first_name": "John", "last_name": "Doe", "email": "john@example.com" }
+    ],
+    "invalidRows": [
+      { "row": 5, "data": { "first_name": "" }, "errors": ["Row 5: first_name is required"] }
+    ],
+    "stats": {
+      "totalRows": 150,
+      "validCount": 140,
+      "invalidCount": 10
+    }
+  }
+}
+```
+
+---
+
+### POST `/import/execute`
+
+Execute the import, inserting valid rows into the target dynamic table.
+
+**Headers:** `Authorization: Bearer <token>` (admin role required)
+
+**Request Body:**
+```json
+{
+  "fileId": "uuid",
+  "tableId": "uuid",
+  "mappings": [
+    { "sourceColumn": "First Name", "targetField": "first_name" },
+    { "sourceColumn": "Email", "targetField": "email", "transform": "lowercase" }
+  ],
+  "skipDuplicates": false
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "totalRows": 150,
+    "importedRows": 140,
+    "errorCount": 10,
+    "errors": [
+      { "row": 5, "error": "Row 5: email is required" }
+    ]
+  }
+}
+```
+
+---
+
+### POST `/import/create-table-and-import`
+
+Shortcut: creates a new dynamic table and imports data in one step.
+
+**Headers:** `Authorization: Bearer <token>` (admin role required)
+
+**Request Body:**
+```json
+{
+  "fileId": "uuid",
+  "tableName": "students",
+  "displayName": "Students",
+  "description": "Student records",
+  "isUserLinked": true,
+  "mappings": [
+    { "sourceColumn": "First Name", "targetField": "first_name" }
+  ]
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "table": { "id": "uuid", "name": "dt_students", "displayName": "Students" },
+    "totalRows": 150,
+    "importedRows": 140,
+    "errorCount": 10,
+    "errors": []
+  }
+}
+```
+
+---
+
+### GET `/import`
+
+List all imports with pagination.
+
+**Headers:** `Authorization: Bearer <token>` (admin role required)
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| page | number | Page number (default: 1) |
+| limit | number | Items per page (default: 20) |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "filename": "students.csv",
+      "fileType": "csv",
+      "fileSize": 10240,
+      "status": "completed",
+      "columns": ["first_name", "last_name"],
+      "totalRows": 150,
+      "importedRows": 140,
+      "errorCount": 10,
+      "createdAt": "2026-04-27T10:00:00.000Z",
+      "completedAt": "2026-04-27T10:01:00.000Z"
+    }
+  ],
+  "meta": { "page": 1, "limit": 20, "total": 1 }
+}
+```
+
+---
+
+### GET `/import/:id`
+
+Get import details including errors.
+
+**Headers:** `Authorization: Bearer <token>` (admin role required)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "filename": "students.csv",
+    "fileType": "csv",
+    "fileSize": 10240,
+    "status": "completed",
+    "columns": ["first_name"],
+    "totalRows": 150,
+    "importedRows": 140,
+    "errorCount": 10,
+    "errors": [{ "row": 5, "error": "Row 5: email is required" }],
+    "createdAt": "2026-04-27T10:00:00.000Z",
+    "completedAt": "2026-04-27T10:01:00.000Z"
+  }
+}
+```
+
+---
+
+### DELETE `/import/:id`
+
+Delete an import record.
+
+**Headers:** `Authorization: Bearer <token>` (admin role required)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": { "message": "Import deleted" }
+}
+```
+
+---
+
 ## Error Codes
 
 | Code | HTTP Status | Description |

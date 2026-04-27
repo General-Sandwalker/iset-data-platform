@@ -5,8 +5,8 @@
 **Total Phases:** 11
 **Completed Phases:** 2
 **Total Issues:** 62
-**Completed Issues:** 13
-**In Progress:** Phase 3
+**Completed Issues:** 14
+**In Progress:** Phase 4
 
 ---
 
@@ -54,7 +54,7 @@
 | 17 | Implement file upload and parsing backend | ✅ Done | 2026-04-27 |
 | 18 | Implement import mapping and validation API | ✅ Done | 2026-04-27 |
 | 19 | Implement import execution API | ✅ Done | 2026-04-27 |
-| 20 | Build data import wizard frontend | 🔄 Pending | — |
+| 20 | Build data import wizard frontend | ✅ Done | 2026-04-27 |
 | 21 | Implement AI-assisted table creation from import | 🔄 Pending | — |
 
 ---
@@ -155,6 +155,19 @@
 ---
 
 *Last updated: 2026-04-27*
+
+## Issue 20: Build data import wizard frontend — Completed 2026-04-27
+
+Implemented 5-step data import wizard with:
+- Step 1: Drag-and-drop file upload (CSV, Excel, JSON) with format/size info
+- Step 2: Raw data preview (first 10 rows in table, file metadata display)
+- Step 3: Column mapping — dropdown per source column to target field, auto-match by name, transform options (uppercase/lowercase/trim/date casts/number/boolean), option to create new table
+- Step 4: Validation preview — green/red indicators per row, error messages, stats cards (total/valid/invalid)
+- Step 5: Execute import with progress, success/error summary, download error log button
+- Import history view listing all past imports with status, row counts, error counts
+- Import detail modal with column list and error preview
+- Error log CSV download from both wizard and history
+- Import API client with full type definitions
 
 ## Issue 15: Build visual database manager UI — Completed 2026-04-27
 
