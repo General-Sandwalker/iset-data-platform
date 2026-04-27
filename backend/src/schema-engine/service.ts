@@ -485,3 +485,277 @@ export async function deleteRelationship(id: string): Promise<void> {
     client.release();
   }
 }
+
+interface DataListParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  search?: string;
+  filters?: Record<string, { op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'in'; value: any }>;
+}
+
+interface DataListResult<T = any> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+function validateValueAgainstField(value: any, field: DynamicField): string | null {
+  if (value === null || value === undefined) {
+    if (field.is_required) {
+      return `Field "${field.display_name}" is required`;
+    }
+    return null;
+  }
+
+  const type = field.field_type;
+
+  switch (type) {
+    case 'number':
+    case 'decimal':
+      if (typeof value === 'string' && value.trim() === '') return null;
+      if (isNaN(Number(value))) return `Field "${field.display_name}" must be a number`;
+      break;
+    case 'boolean':
+      if (typeof value !== 'boolean' && value !== 'true' && value !== 'false' && value !== 0 && value !== 1) {
+        return `Field "${field.display_name}" must be true or false`;
+      }
+      break;
+    case 'date':
+    case 'datetime':
+      const dateVal = type === 'date' ? new Date(value) : new Date(value);
+      if (isNaN(dateVal.getTime())) return `Field "${field.display_name}" must be a valid date`;
+      break;
+    case 'email':
+      if (typeof value === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return `Field "${field.display_name}" must be a valid email`;
+      }
+      break;
+    case 'phone':
+      if (typeof value === 'string' && !/^\+?[\d\s\-()]{6,20}$/.test(value)) {
+        return `Field "${field.display_name}" must be a valid phone number`;
+      }
+      break;
+    case 'select': {
+      const config = field.config_json as { options?: string[] };
+      const opts = config?.options || [];
+      if (opts.length > 0 && !opts.includes(String(value))) {
+        return `Field "${field.display_name}" must be one of: ${opts.join(', ')}`;
+      }
+      break;
+    }
+    case 'multiselect': {
+      if (!Array.isArray(value)) return `Field "${field.display_name}" must be an array`;
+      const config = field.config_json as { options?: string[] };
+      const opts = config?.options || [];
+      if (opts.length > 0) {
+        for (const v of value) {
+          if (!opts.includes(String(v))) {
+            return `Each value in "${field.display_name}" must be one of: ${opts.join(', ')}`;
+          }
+        }
+      }
+      break;
+    }
+  }
+
+  return null;
+}
+
+export async function listData(
+  tableId: string,
+  params: DataListParams = {}
+): Promise<DataListResult> {
+  const table = await getTableById(tableId);
+  const fields = await listFields(tableId);
+  const fieldMap = new Map(fields.map(f => [f.name, f]));
+
+  const page = Math.max(1, params.page || 1);
+  const limit = Math.min(100, Math.max(1, params.limit || 20));
+  const offset = (page - 1) * limit;
+
+  const whereClauses: string[] = [];
+  const values: any[] = [];
+  let paramIndex = 1;
+
+  if (params.filters) {
+    for (const [fieldName, filter] of Object.entries(params.filters)) {
+      if (!fieldMap.has(fieldName)) continue;
+      const field = fieldMap.get(fieldName)!;
+      const col = `${table.name}.${fieldName}`;
+
+      switch (filter.op) {
+        case 'eq': whereClauses.push(`${col} = $${paramIndex++}`); values.push(filter.value); break;
+        case 'ne': whereClauses.push(`${col} != $${paramIndex++}`); values.push(filter.value); break;
+        case 'gt': whereClauses.push(`${col} > $${paramIndex++}`); values.push(filter.value); break;
+        case 'gte': whereClauses.push(`${col} >= $${paramIndex++}`); values.push(filter.value); break;
+        case 'lt': whereClauses.push(`${col} < $${paramIndex++}`); values.push(filter.value); break;
+        case 'lte': whereClauses.push(`${col} <= $${paramIndex++}`); values.push(filter.value); break;
+        case 'like': whereClauses.push(`${col} ILIKE $${paramIndex++}`); values.push(`%${filter.value}%`); break;
+        case 'in':
+          if (Array.isArray(filter.value)) {
+            whereClauses.push(`${col} = ANY($${paramIndex++}::text[])`);
+            values.push(filter.value.map(String));
+          }
+          break;
+      }
+    }
+  }
+
+  if (params.search) {
+    const searchTerms: string[] = [];
+    for (const field of fields) {
+      if (['text', 'email', 'phone', 'select', 'multiselect', 'user_link'].includes(field.field_type)) {
+        searchTerms.push(`${table.name}.${field.name} ILIKE $${paramIndex}`);
+        values.push(`%${params.search}%`);
+        paramIndex++;
+      }
+    }
+    if (searchTerms.length > 0) {
+      whereClauses.push(`(${searchTerms.join(' OR ')})`);
+    }
+  }
+
+  const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+  const sortBy = params.sortBy && fieldMap.has(params.sortBy) ? params.sortBy : 'created_at';
+  const sortOrder = params.sortOrder === 'asc' ? 'ASC' : 'DESC';
+  const orderSQL = `${table.name}.${sortBy} ${sortOrder} NULLS LAST`;
+
+  const countResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM ${table.name} ${whereSQL}`,
+    values
+  );
+  const total = parseInt(countResult.rows[0].count);
+
+  const dataResult = await query(
+    `SELECT * FROM ${table.name} ${whereSQL} ORDER BY ${orderSQL} LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+    [...values, limit, offset]
+  );
+
+  return { data: dataResult.rows, total, page, limit };
+}
+
+export async function insertData(
+  tableId: string,
+  input: Record<string, any>,
+  userId?: string
+): Promise<any> {
+  const table = await getTableById(tableId);
+  const fields = await listFields(tableId);
+  const fieldMap = new Map(fields.map(f => [f.name, f]));
+
+  for (const [name, field] of fieldMap) {
+    const error = validateValueAgainstField(input[name], field);
+    if (error) throw new HttpError(400, 'VALIDATION_ERROR', error);
+  }
+
+  const columns: string[] = [];
+  const values: any[] = [];
+  const placeholders: string[] = [];
+  let i = 1;
+
+  for (const field of fields) {
+    if (input[field.name] === undefined) {
+      if (field.is_required && field.name !== 'cin' && field.name !== 'created_by' && field.name !== 'created_at' && field.name !== 'updated_at') {
+        continue;
+      }
+      if (!field.is_required) continue;
+    }
+    if (input[field.name] !== undefined) {
+      columns.push(field.name);
+      let value = input[field.name];
+
+      if (field.field_type === 'boolean' && typeof value === 'string') {
+        value = value === 'true' || value === '1';
+      }
+      if (field.field_type === 'multiselect' && Array.isArray(value)) {
+        value = JSON.stringify(value);
+      }
+
+      placeholders.push(`$${i++}`);
+      values.push(value);
+    }
+  }
+
+  if (table.is_user_linked && userId && !columns.includes('cin')) {
+    columns.push('cin');
+    placeholders.push(`$${i++}`);
+    values.push(userId);
+  }
+
+  columns.push('created_by');
+  placeholders.push(`$${i++}`);
+  values.push(userId || null);
+
+  const sql = `INSERT INTO ${table.name} (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+  const result = await query(sql, values);
+  return result.rows[0];
+}
+
+export async function updateData(
+  tableId: string,
+  recordId: string,
+  input: Record<string, any>
+): Promise<any> {
+  const table = await getTableById(tableId);
+  const fields = await listFields(tableId);
+  const fieldMap = new Map(fields.map(f => [f.name, f]));
+
+  const existing = await query(`SELECT id FROM ${table.name} WHERE id = $1`, [recordId]);
+  if (existing.rows.length === 0) {
+    throw new HttpError(404, 'RECORD_NOT_FOUND', 'Record not found');
+  }
+
+  for (const [fieldName, field] of fieldMap) {
+    if (input[fieldName] !== undefined) {
+      const error = validateValueAgainstField(input[fieldName], field);
+      if (error) throw new HttpError(400, 'VALIDATION_ERROR', error);
+    }
+  }
+
+  const updates: string[] = [];
+  const values: any[] = [];
+  let i = 1;
+
+  for (const field of fields) {
+    if (input[field.name] !== undefined) {
+      updates.push(`${field.name} = $${i++}`);
+      let value = input[field.name];
+
+      if (field.field_type === 'boolean' && typeof value === 'string') {
+        value = value === 'true' || value === '1';
+      }
+      if (field.field_type === 'multiselect' && Array.isArray(value)) {
+        value = JSON.stringify(value);
+      }
+
+      values.push(value);
+    }
+  }
+
+  if (updates.length === 0) {
+    const result = await query(`SELECT * FROM ${table.name} WHERE id = $1`, [recordId]);
+    return result.rows[0];
+  }
+
+  updates.push(`updated_at = NOW()`);
+  values.push(recordId);
+
+  const sql = `UPDATE ${table.name} SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`;
+  const result = await query(sql, values);
+  return result.rows[0];
+}
+
+export async function deleteData(tableId: string, recordId: string): Promise<void> {
+  const table = await getTableById(tableId);
+
+  const existing = await query(`SELECT id FROM ${table.name} WHERE id = $1`, [recordId]);
+  if (existing.rows.length === 0) {
+    throw new HttpError(404, 'RECORD_NOT_FOUND', 'Record not found');
+  }
+
+  await query(`DELETE FROM ${table.name} WHERE id = $1`, [recordId]);
+}

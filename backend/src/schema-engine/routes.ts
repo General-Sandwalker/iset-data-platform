@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin, requireSuperAdmin } from '../middleware/rbac.js';
-import { sendSuccess, sendCreated } from '../middleware/response.js';
+import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
 import {
   createTable, listTables, getTableById, updateTable, deleteTable,
@@ -11,6 +11,7 @@ import {
   fieldTypes,
   createRelationship, listRelationships, getRelationshipById, updateRelationship, deleteRelationship,
   relationshipTypes,
+  listData, insertData, updateData, deleteData,
 } from './service.js';
 
 const router = Router();
@@ -159,6 +160,49 @@ router.delete('/relationships/:id', requireAdmin, validate({ params: uuidParam }
     await deleteRelationship(req.params.id);
     await logActivity({ userId: req.user!.id, action: 'DELETE_RELATIONSHIP', entityType: 'dynamic_relationship', entityId: req.params.id, ipAddress: req.ip });
     sendSuccess(res, { message: 'Relationship deleted' });
+  } catch (err) { next(err); }
+});
+
+router.get('/tables/:id/data', async (req, res, next) => {
+  try {
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? parseInt(String(req.query.limit)) : 20;
+    const sortBy = req.query.sortBy ? String(req.query.sortBy) : undefined;
+    const sortOrder = req.query.sortOrder === 'asc' ? 'asc' : 'desc';
+    const search = req.query.search ? String(req.query.search) : undefined;
+
+    let filters: Record<string, { op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'in'; value: any }> | undefined;
+    if (req.query.filters) {
+      try {
+        filters = JSON.parse(String(req.query.filters));
+      } catch {}
+    }
+
+    const result = await listData(req.params.id, { page, limit, sortBy, sortOrder, search, filters });
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
+  } catch (err) { next(err); }
+});
+
+router.post('/tables/:id/data', async (req, res, next) => {
+  try {
+    const record = await insertData(req.params.id, req.body, req.user!.id);
+    await logActivity({ userId: req.user!.id, action: 'CREATE_RECORD', entityType: 'dynamic_record', entityId: record.id, ipAddress: req.ip });
+    sendCreated(res, record);
+  } catch (err) { next(err); }
+});
+
+router.patch('/tables/:id/data/:recordId', async (req, res, next) => {
+  try {
+    const record = await updateData(req.params.id, req.params.recordId, req.body);
+    sendSuccess(res, record);
+  } catch (err) { next(err); }
+});
+
+router.delete('/tables/:id/data/:recordId', async (req, res, next) => {
+  try {
+    await deleteData(req.params.id, req.params.recordId);
+    await logActivity({ userId: req.user!.id, action: 'DELETE_RECORD', entityType: 'dynamic_record', entityId: req.params.recordId, ipAddress: req.ip });
+    sendSuccess(res, { message: 'Record deleted' });
   } catch (err) { next(err); }
 });
 
