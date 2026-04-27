@@ -21,7 +21,9 @@ import {
   parseCSV,
   parseExcel,
   parseJSON,
+  previewImport,
   type ParsedFileResult,
+  type ColumnMapping,
 } from './service.js';
 
 const router = Router();
@@ -203,5 +205,151 @@ router.delete('/:id', authenticate, requireAdmin, validate({ params: uuidParam }
     next(err);
   }
 });
+
+const previewSchema = z.object({
+  fileId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  mappings: z.array(z.object({
+    sourceColumn: z.string(),
+    targetField: z.string(),
+    transform: z.enum(['uppercase', 'lowercase', 'trim', 'date_iso', 'date_fr', 'number', 'boolean']).optional(),
+  })),
+});
+
+router.post(
+  '/preview',
+  authenticate,
+  requireAdmin,
+  validate({ body: previewSchema }),
+  async (req, res, next) => {
+    try {
+      const { fileId, tableId, mappings } = req.body;
+
+      const importFile = await getImport(fileId);
+      if (!importFile.columns || importFile.columns.length === 0) {
+        throw new Error('File has no columns. Please upload a file first.');
+      }
+
+      const filePath = path.join(uploadDir, importFile.filename);
+      let allRows: Record<string, unknown>[] = [];
+
+      if (importFile.file_type === 'csv') {
+        const parsed = await parseCSV(filePath);
+        allRows = parsed.sampleRows;
+      } else if (importFile.file_type === 'excel') {
+        const parsed = await parseExcel(filePath);
+        allRows = parsed.sampleRows;
+      } else if (importFile.file_type === 'json') {
+        const parsed = await parseJSON(filePath);
+        allRows = parsed.sampleRows;
+      }
+
+      const preview = await previewImport(importFile, allRows, tableId, mappings);
+
+      sendSuccess(res, {
+        validRows: preview.validRows.slice(0, 10),
+        invalidRows: preview.invalidRows.slice(0, 10),
+        stats: preview.stats,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+const executeSchema = z.object({
+  fileId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  mappings: z.array(z.object({
+    sourceColumn: z.string(),
+    targetField: z.string(),
+    transform: z.enum(['uppercase', 'lowercase', 'trim', 'date_iso', 'date_fr', 'number', 'boolean']).optional(),
+  })),
+  skipDuplicates: z.boolean().default(false),
+});
+
+router.post(
+  '/execute',
+  authenticate,
+  requireAdmin,
+  validate({ body: executeSchema }),
+  async (req, res, next) => {
+    try {
+      const { fileId, tableId, mappings } = req.body;
+
+      const importFile = await getImport(fileId);
+      const filePath = path.join(uploadDir, importFile.filename);
+      let allRows: Record<string, unknown>[] = [];
+
+      if (importFile.file_type === 'csv') {
+        const parsed = await parseCSV(filePath);
+        allRows = parsed.sampleRows;
+      } else if (importFile.file_type === 'excel') {
+        const parsed = await parseExcel(filePath);
+        allRows = parsed.sampleRows;
+      } else if (importFile.file_type === 'json') {
+        const parsed = await parseJSON(filePath);
+        allRows = parsed.sampleRows;
+      }
+
+      const { listFields, insertData } = await import('../schema-engine/service.js');
+      const targetFields = await listFields(tableId);
+      const fieldMap = new Map(targetFields.map(f => [f.name, f]));
+
+      const { applyTransform, validateValue } = await import('./service.js');
+
+      let importedCount = 0;
+      const errors: { row: number; error: string }[] = [];
+
+      for (let i = 0; i < allRows.length; i++) {
+        const sourceRow = allRows[i];
+        const mappedData: Record<string, unknown> = {};
+
+        try {
+          for (const mapping of mappings) {
+            const sourceValue = sourceRow[mapping.sourceColumn];
+            const transformedValue = applyTransform(sourceValue, mapping.transform);
+            const targetField = fieldMap.get(mapping.targetField);
+
+            if (targetField) {
+              mappedData[mapping.targetField] = transformedValue;
+
+              const error = validateValue(transformedValue, targetField);
+              if (error) {
+                throw new Error(`Row ${i + 1}: ${error}`);
+              }
+            }
+          }
+
+          if (Object.keys(mappedData).length > 0) {
+            await insertData(tableId, mappedData);
+            importedCount++;
+          }
+        } catch (err: any) {
+          errors.push({ row: i + 1, error: err.message });
+        }
+      }
+
+      await recordImportErrors(fileId, importedCount, errors.length, errors);
+      await updateImportStatus(fileId, importedCount > 0 ? 'completed' : 'failed');
+
+      await logActivity({
+        userId: req.user!.id,
+        action: 'EXECUTE_IMPORT',
+        entityType: 'import',
+        entityId: fileId,
+        ipAddress: req.ip,
+      });
+
+      sendSuccess(res, {
+        importedRows: importedCount,
+        errorCount: errors.length,
+        errors: errors.slice(0, 20),
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 export default router;

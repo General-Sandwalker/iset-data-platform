@@ -3,6 +3,7 @@ import { HttpError } from '../middleware/auth.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as XLSX from 'xlsx';
+import type { DynamicField } from '../schema-engine/service.js';
 
 export interface ImportFile {
   id: string;
@@ -260,4 +261,196 @@ export async function deleteImport(id: string): Promise<void> {
   await query('DELETE FROM imports WHERE id = $1', [id]);
 }
 
-export { ensureUploadDir, detectFileType, generateFileId, UPLOAD_DIR, parseCSV, parseExcel, parseJSON };
+export interface ColumnMapping {
+  sourceColumn: string;
+  targetField: string;
+  transform?: 'uppercase' | 'lowercase' | 'trim' | 'date_iso' | 'date_fr' | 'number' | 'boolean';
+}
+
+export interface ValidationError {
+  row: number;
+  field: string;
+  message: string;
+  value: unknown;
+}
+
+export interface PreviewResult {
+  validRows: Record<string, unknown>[];
+  invalidRows: { row: Record<string, unknown>; errors: ValidationError[] }[];
+  stats: {
+    total: number;
+    valid: number;
+    invalid: number;
+  };
+}
+
+function applyTransform(value: unknown, transform?: string): unknown {
+  if (value === null || value === undefined) return value;
+  const strVal = String(value);
+
+  switch (transform) {
+    case 'uppercase':
+      return strVal.toUpperCase();
+    case 'lowercase':
+      return strVal.toLowerCase();
+    case 'trim':
+      return strVal.trim();
+    case 'number':
+      const num = parseFloat(strVal);
+      return isNaN(num) ? value : num;
+    case 'boolean':
+      return strVal.toLowerCase() === 'true' || strVal === '1' || strVal.toLowerCase() === 'yes';
+    case 'date_iso':
+      const date = new Date(strVal);
+      return isNaN(date.getTime()) ? value : date.toISOString().split('T')[0];
+    case 'date_fr':
+      const parts = strVal.split('/');
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+      return value;
+    default:
+      return value;
+  }
+}
+
+function validateValue(value: unknown, field: DynamicField): string | null {
+  if (value === null || value === undefined || value === '') {
+    if (field.is_required) {
+      return `Field "${field.display_name}" is required`;
+    }
+    return null;
+  }
+
+  const type = field.field_type;
+
+  switch (type) {
+    case 'number':
+    case 'decimal':
+      if (isNaN(Number(value))) {
+        return `Field "${field.display_name}" must be a number`;
+      }
+      break;
+    case 'boolean':
+      if (typeof value !== 'boolean' && value !== 'true' && value !== 'false' && value !== '0' && value !== '1') {
+        return `Field "${field.display_name}" must be true or false`;
+      }
+      break;
+    case 'date':
+    case 'datetime':
+      const dateVal = new Date(String(value));
+      if (isNaN(dateVal.getTime())) {
+        return `Field "${field.display_name}" must be a valid date`;
+      }
+      break;
+    case 'email':
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
+        return `Field "${field.display_name}" must be a valid email`;
+      }
+      break;
+    case 'phone':
+      if (!/^\+?[\d\s\-()]{6,20}$/.test(String(value))) {
+        return `Field "${field.display_name}" must be a valid phone number`;
+      }
+      break;
+    case 'select': {
+      const config = field.config_json as { options?: string[] };
+      const opts = config?.options || [];
+      if (opts.length > 0 && !opts.includes(String(value))) {
+        return `Field "${field.display_name}" must be one of: ${opts.join(', ')}`;
+      }
+      break;
+    }
+    case 'user_link':
+      const cinValue = String(value);
+      if (!/^[0-9]{8}$/.test(cinValue)) {
+        return `Field "${field.display_name}" must be a valid CIN (8 digits)`;
+      }
+      break;
+  }
+
+  return null;
+}
+
+export async function previewImport(
+  file: ImportFile,
+  allRows: Record<string, unknown>[],
+  targetTableId: string,
+  mappings: ColumnMapping[]
+): Promise<PreviewResult> {
+  const { listFields } = await import('../schema-engine/service.js');
+  const targetFields = await listFields(targetTableId);
+  const fieldMap = new Map(targetFields.map(f => [f.name, f]));
+
+  const validRows: Record<string, unknown>[] = [];
+  const invalidRows: { row: Record<string, unknown>; errors: ValidationError[] }[] = [];
+
+  for (let i = 0; i < allRows.length; i++) {
+    const sourceRow = allRows[i];
+    const mappedRow: Record<string, unknown> = {};
+    const rowErrors: ValidationError[] = [];
+
+    for (const mapping of mappings) {
+      const sourceValue = sourceRow[mapping.sourceColumn];
+      const transformedValue = applyTransform(sourceValue, mapping.transform);
+      const targetField = fieldMap.get(mapping.targetField);
+
+      if (!targetField) {
+        rowErrors.push({
+          row: i + 1,
+          field: mapping.targetField,
+          message: `Unknown target field`,
+          value: sourceValue,
+        });
+        continue;
+      }
+
+      mappedRow[mapping.targetField] = transformedValue;
+
+      const error = validateValue(transformedValue, targetField);
+      if (error) {
+        rowErrors.push({
+          row: i + 1,
+          field: targetField.display_name,
+          message: error,
+          value: sourceValue,
+        });
+      }
+    }
+
+    if (rowErrors.length === 0) {
+      validRows.push(mappedRow);
+    } else {
+      invalidRows.push({ row: sourceRow, errors: rowErrors });
+    }
+  }
+
+  return {
+    validRows,
+    invalidRows,
+    stats: {
+      total: allRows.length,
+      valid: validRows.length,
+      invalid: invalidRows.length,
+    },
+  };
+}
+
+async function readAllRows(file: ImportFile): Promise<Record<string, unknown>[]> {
+  const filePath = path.join(UPLOAD_DIR, file.filename);
+
+  if (file.file_type === 'csv') {
+    const parsed = await parseCSV(filePath);
+    return parsed.sampleRows;
+  } else if (file.file_type === 'excel') {
+    const parsed = await parseExcel(filePath);
+    return parsed.sampleRows;
+  } else if (file.file_type === 'json') {
+    const parsed = await parseJSON(filePath);
+    return parsed.sampleRows;
+  }
+
+  return [];
+}
+
+export { ensureUploadDir, detectFileType, generateFileId, UPLOAD_DIR, parseCSV, parseExcel, parseJSON, applyTransform, validateValue };
