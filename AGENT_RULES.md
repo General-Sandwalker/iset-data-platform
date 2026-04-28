@@ -89,6 +89,16 @@ A monorepo digital observatory platform for ISET Tozeur replacing scattered Exce
 
 **5 issues remaining in Phase 5.**
 
+### Phase 5: AI-Assisted Survey Engine 🔄 In Progress
+
+| Issue | Title | Status |
+|-------|-------|--------|
+| #22 | Implement survey metadata and question API | ✅ Done |
+| #23 | Implement survey publishing and response API | 🔄 Pending |
+| #24 | Integrate Groq AI survey generation | 🔄 Pending |
+| #25 | Build survey builder frontend | 🔄 Pending |
+| #26 | Build survey response viewer | 🔄 Pending |
+
 ---
 
 ## How to Continue Work in a New Session
@@ -253,4 +263,4 @@ gh issue close 2 --comment "Implementation details..."
 
 ---
 
-*Last updated: 2026-04-26*
+*Last updated: 2026-04-28*
