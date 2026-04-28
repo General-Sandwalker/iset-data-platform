@@ -19,7 +19,7 @@ interface GroqResponse {
 
 export async function groqChat(
   messages: GroqMessage[],
-  model: string = 'llama-3.1-70b-versatile'
+  model: string = 'qwen/qwen3-32b'
 ): Promise<string> {
   if (!config.GROQ_API_KEY) {
     throw new Error('GROQ_API_KEY is not configured');
