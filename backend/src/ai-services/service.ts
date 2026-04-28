@@ -1,6 +1,7 @@
 import { groqChat } from '../config/groq.js';
 import { HttpError } from '../middleware/auth.js';
 import { fieldTypes, type FieldType } from '../schema-engine/service.js';
+import { questionTypes, type QuestionType } from '../survey-engine/service.js';
 
 export interface SuggestedField {
   name: string;
@@ -138,6 +139,123 @@ Suggest the optimal table schema as JSON.`;
   });
 
   parsed.tableName = parsed.tableName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+
+  return parsed;
+}
+
+export interface SuggestedQuestion {
+  label: string;
+  type: QuestionType;
+  options?: string[];
+  isRequired: boolean;
+  min?: number;
+  max?: number;
+}
+
+export interface SurveySuggestion {
+  title: string;
+  description: string;
+  questions: SuggestedQuestion[];
+}
+
+const SURVEY_GENERATE_SYSTEM_PROMPT = `You are an expert academic survey designer working for ISET Tozeur, a higher education observatory platform. Generate structured survey questions in JSON format based on the user's description.
+
+You must use ONLY these question types:
+- "multiple_choice": single selection from a list of options (e.g., satisfaction level, yes/no, category)
+- "dropdown": single selection from a dropdown (same as multiple_choice but rendered as dropdown for long option lists)
+- "checkbox": multiple selections from a list (e.g., select all that apply)
+- "text": open-ended text response (short answer, comments, descriptions)
+- "rating": numeric rating scale (e.g., 1-5, 1-10 satisfaction)
+- "number": numeric input (e.g., age, count, percentage)
+- "date": date input (e.g., graduation date, employment start date)
+
+Survey design best practices:
+- Start with easy, non-sensitive questions first
+- Group related questions together
+- Keep the survey concise (5-15 questions)
+- Use "multiple_choice" or "dropdown" when possible for easier analysis
+- Only mark questions as required if they are truly essential
+- For rating scales, include configJson with min and max
+- For choice questions, include configJson with options array
+- Use French labels if the context suggests a French-speaking audience
+- Avoid biased or leading questions
+
+IMPORTANT RULES:
+- Respond ONLY with valid JSON, no markdown, no code fences, no explanation
+- The output must be exactly this JSON structure:
+{
+  "title": "string",
+  "description": "string",
+  "questions": [
+    {
+      "label": "string",
+      "type": "string",
+      "options": ["string"],
+      "isRequired": boolean,
+      "min": number,
+      "max": number
+    }
+  ]
+}
+- The "options" field is only needed for multiple_choice, dropdown, and checkbox types
+- The "min" and "max" fields are only needed for rating type
+- Omit options/min/max from the JSON if not applicable to the question type
+- Every question must have "label", "type", and "isRequired"`;
+
+export async function generateSurvey(
+  description: string,
+  targetAudience?: string
+): Promise<SurveySuggestion> {
+  if (!description || description.trim().length === 0) {
+    throw new HttpError(400, 'INVALID_INPUT', 'Description cannot be empty');
+  }
+
+  const audienceText = targetAudience ? `Target audience: ${targetAudience}.` : '';
+  const userMessage = `Generate a survey based on this description:
+
+${description}
+
+${audienceText}
+
+Generate the survey as JSON.`;
+
+  const responseText = await groqChat([
+    { role: 'system', content: SURVEY_GENERATE_SYSTEM_PROMPT },
+    { role: 'user', content: userMessage },
+  ]);
+
+  let parsed: SurveySuggestion;
+  try {
+    const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new HttpError(502, 'AI_PARSE_ERROR', 'Failed to parse AI response as valid JSON. Please try again.');
+  }
+
+  if (!parsed.title || !parsed.questions || !Array.isArray(parsed.questions)) {
+    throw new HttpError(502, 'AI_INVALID_RESPONSE', 'AI response is missing required fields (title, questions). Please try again.');
+  }
+
+  const validQuestionTypes = new Set<string>(questionTypes);
+  parsed.questions = parsed.questions.map((q: SuggestedQuestion) => {
+    if (!validQuestionTypes.has(q.type)) {
+      q.type = 'text';
+    }
+    if (!q.label) {
+      q.label = 'Untitled question';
+    }
+    if (q.isRequired === undefined) {
+      q.isRequired = false;
+    }
+    if ((q.type === 'multiple_choice' || q.type === 'dropdown' || q.type === 'checkbox') && (!q.options || !Array.isArray(q.options))) {
+      q.options = ['Option 1', 'Option 2', 'Option 3'];
+    }
+    if (q.type === 'rating' && !q.min) {
+      q.min = 1;
+      q.max = q.max || 5;
+    }
+    return q;
+  });
 
   return parsed;
 }
