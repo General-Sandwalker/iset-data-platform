@@ -15,6 +15,7 @@ import schemaRoutes from './schema-engine/routes.js';
 import importRoutes from './data-ingestion/routes.js';
 import aiRoutes from './ai-services/routes.js';
 import surveyRoutes from './survey-engine/routes.js';
+import { publicSurveyRoutes } from './survey-engine/public-routes.js';
 import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
@@ -49,9 +50,11 @@ apiRouter.use('/import', importRoutes);
 apiRouter.use('/surveys', surveyRoutes);
 apiRouter.use('/ai', aiLimiter, aiRoutes);
 
-  app.use('/api/v1', apiRouter);
+app.use('/api/v1', apiRouter);
 
-  app.use(errorHandler);
+app.use('/public', publicSurveyRoutes);
+
+app.use(errorHandler);
 
   const PORT = config.PORT || 4000;
 

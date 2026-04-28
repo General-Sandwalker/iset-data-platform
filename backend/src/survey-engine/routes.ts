@@ -20,6 +20,11 @@ import {
   reorderQuestions,
   linkSurveyToTable,
   autoCreateFieldsForSurvey,
+  publishSurvey,
+  closeSurvey,
+  getSurveyBySlug,
+  submitSurveyResponse,
+  getSurveyStats,
   questionTypes,
   surveyStatuses,
   accessTypes,
@@ -71,6 +76,10 @@ const reorderSchema = z.object({
 
 const linkTableSchema = z.object({
   tableId: z.string().uuid(),
+});
+
+const submitSchema = z.object({
+  responses: z.record(z.any()),
 });
 
 router.use(authenticate);
@@ -187,6 +196,29 @@ router.post('/:id/auto-create-fields', requireAdmin, validate({ params: uuidPara
     const survey = await autoCreateFieldsForSurvey(req.params.id);
     await logActivity({ userId: req.user!.id, action: 'AUTO_CREATE_SURVEY_FIELDS', entityType: 'survey', entityId: req.params.id, ipAddress: req.ip });
     sendSuccess(res, survey);
+  } catch (err) { next(err); }
+});
+
+router.post('/:id/publish', requireAdmin, validate({ params: uuidParam }), async (req, res, next) => {
+  try {
+    const survey = await publishSurvey(req.params.id);
+    await logActivity({ userId: req.user!.id, action: 'PUBLISH_SURVEY', entityType: 'survey', entityId: req.params.id, ipAddress: req.ip });
+    sendSuccess(res, survey);
+  } catch (err) { next(err); }
+});
+
+router.post('/:id/close', requireAdmin, validate({ params: uuidParam }), async (req, res, next) => {
+  try {
+    const survey = await closeSurvey(req.params.id);
+    await logActivity({ userId: req.user!.id, action: 'CLOSE_SURVEY', entityType: 'survey', entityId: req.params.id, ipAddress: req.ip });
+    sendSuccess(res, survey);
+  } catch (err) { next(err); }
+});
+
+router.get('/:id/stats', requireAdmin, validate({ params: uuidParam }), async (req, res, next) => {
+  try {
+    const stats = await getSurveyStats(req.params.id);
+    sendSuccess(res, stats);
   } catch (err) { next(err); }
 });
 

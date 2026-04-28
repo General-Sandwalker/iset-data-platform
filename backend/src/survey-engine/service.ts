@@ -1,6 +1,6 @@
 import { query, getClient } from '../config/database.js';
 import { HttpError } from '../middleware/auth.js';
-import { addField, getTableById, listFields, type FieldType } from '../schema-engine/service.js';
+import { addField, getTableById, listFields, listData, insertData, type FieldType } from '../schema-engine/service.js';
 
 export const questionTypes = [
   'multiple_choice',
@@ -466,4 +466,281 @@ export async function autoCreateFieldsForSurvey(
   }
 
   return getSurveyById(surveyId);
+}
+
+export async function publishSurvey(id: string): Promise<Survey> {
+  const survey = await getSurveyById(id);
+
+  if (survey.status === 'published') {
+    throw new HttpError(400, 'ALREADY_PUBLISHED', 'Survey is already published');
+  }
+  if (survey.status === 'closed') {
+    throw new HttpError(400, 'SURVEY_CLOSED', 'Cannot republish a closed survey');
+  }
+
+  if (!survey.target_table_id) {
+    throw new HttpError(400, 'NO_TARGET_TABLE', 'Survey must have a target table before publishing');
+  }
+
+  const questions = await listQuestions(id);
+  if (questions.length === 0) {
+    throw new HttpError(400, 'NO_QUESTIONS', 'Survey must have at least one question before publishing');
+  }
+
+  const unpublishedQuestions = questions.filter(q => !q.target_field_id);
+  if (unpublishedQuestions.length > 0) {
+    throw new HttpError(400, 'UNMAPPED_QUESTIONS', `${unpublishedQuestions.length} question(s) are not mapped to target table fields. Run auto-create-fields first.`);
+  }
+
+  const slug = await query('SELECT gen_random_uuid() as slug');
+  const publishedSlug = slug.rows[0].slug;
+
+  const result = await query<Survey>(
+    'UPDATE surveys SET status = $1, published_slug = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+    ['published', publishedSlug, id]
+  );
+  return result.rows[0];
+}
+
+export async function closeSurvey(id: string): Promise<Survey> {
+  const survey = await getSurveyById(id);
+
+  if (survey.status !== 'published') {
+    throw new HttpError(400, 'NOT_PUBLISHED', 'Can only close a published survey');
+  }
+
+  const result = await query<Survey>(
+    'UPDATE surveys SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+    ['closed', id]
+  );
+  return result.rows[0];
+}
+
+export async function getSurveyBySlug(slug: string): Promise<SurveyWithQuestions> {
+  const result = await query<Survey>(
+    'SELECT * FROM surveys WHERE published_slug = $1',
+    [slug]
+  );
+  if (result.rows.length === 0) {
+    throw new HttpError(404, 'SURVEY_NOT_FOUND', 'Survey not found');
+  }
+  const survey = result.rows[0];
+  const questions = await listQuestions(survey.id);
+  return { ...survey, questions };
+}
+
+export interface SurveySubmission {
+  [fieldName: string]: any;
+}
+
+export async function submitSurveyResponse(
+  slug: string,
+  responses: SurveySubmission,
+  userCin?: string
+): Promise<any> {
+  const survey = await getSurveyBySlug(slug);
+
+  if (survey.status !== 'published') {
+    throw new HttpError(400, 'SURVEY_NOT_ACTIVE', 'This survey is not accepting responses');
+  }
+
+  if (survey.access_type === 'authenticated' && !userCin) {
+    throw new HttpError(401, 'AUTH_REQUIRED', 'This survey requires authentication');
+  }
+
+  if (!survey.target_table_id) {
+    throw new HttpError(500, 'NO_TARGET_TABLE', 'Survey has no target table configured');
+  }
+
+  const targetTable = await getTableById(survey.target_table_id);
+  const fields = await listFields(survey.target_table_id);
+  const questions = await listQuestions(survey.id);
+
+  const fieldMap = new Map(fields.map(f => [f.id, f]));
+
+  const mappedData: Record<string, any> = {};
+  const errors: string[] = [];
+
+  for (const question of questions) {
+    if (!question.target_field_id) continue;
+
+    const field = fieldMap.get(question.target_field_id);
+    if (!field) continue;
+
+    const value = responses[question.id];
+
+    if (question.is_required && (value === undefined || value === null || value === '')) {
+      errors.push(`Question "${question.label}" is required`);
+      continue;
+    }
+
+    if (value !== undefined && value !== null && value !== '') {
+      const qConfig = question.config_json as Record<string, unknown>;
+
+      if ((question.type === 'multiple_choice' || question.type === 'dropdown') && qConfig?.options) {
+        const options = qConfig.options as string[];
+        if (!options.includes(String(value))) {
+          errors.push(`Invalid option for "${question.label}"`);
+          continue;
+        }
+      }
+
+      if (question.type === 'checkbox' && qConfig?.options && Array.isArray(value)) {
+        const options = qConfig.options as string[];
+        for (const v of value) {
+          if (!options.includes(String(v))) {
+            errors.push(`Invalid option "${v}" for "${question.label}"`);
+            continue;
+          }
+        }
+      }
+
+      if (question.type === 'rating') {
+        const min = (qConfig?.min as number) || 1;
+        const max = (qConfig?.max as number) || 5;
+        const numVal = Number(value);
+        if (isNaN(numVal) || numVal < min || numVal > max) {
+          errors.push(`Rating for "${question.label}" must be between ${min} and ${max}`);
+          continue;
+        }
+      }
+
+      if (question.type === 'date') {
+        const dateVal = new Date(value);
+        if (isNaN(dateVal.getTime())) {
+          errors.push(`Invalid date for "${question.label}"`);
+          continue;
+        }
+      }
+
+      if (question.type === 'number') {
+        if (isNaN(Number(value))) {
+          errors.push(`Invalid number for "${question.label}"`);
+          continue;
+        }
+      }
+
+      if (question.type === 'checkbox' && Array.isArray(value)) {
+        mappedData[field.name] = JSON.stringify(value);
+      } else if (question.type === 'number' || question.type === 'rating') {
+        mappedData[field.name] = Number(value);
+      } else if (question.type === 'date') {
+        mappedData[field.name] = value;
+      } else {
+        mappedData[field.name] = String(value);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'Response validation failed', errors);
+  }
+
+  if (!survey.allow_multiple_responses && userCin && targetTable.is_user_linked) {
+    const existing = await query(
+      `SELECT id FROM ${targetTable.name} WHERE cin = $1`,
+      [userCin]
+    );
+    if (existing.rows.length > 0) {
+      throw new HttpError(409, 'DUPLICATE_RESPONSE', 'You have already submitted a response to this survey');
+    }
+  }
+
+  if (userCin && targetTable.is_user_linked) {
+    mappedData.cin = userCin;
+  }
+
+  const record = await insertData(survey.target_table_id, mappedData, userCin ? undefined : undefined);
+  return record;
+}
+
+export async function getSurveyStats(id: string): Promise<any> {
+  const survey = await getSurveyById(id);
+
+  if (!survey.target_table_id) {
+    throw new HttpError(400, 'NO_TARGET_TABLE', 'Survey has no target table');
+  }
+
+  const targetTable = await getTableById(survey.target_table_id);
+  const questions = await listQuestions(id);
+  const fields = await listFields(survey.target_table_id);
+  const fieldMap = new Map(fields.map(f => [f.id, f]));
+
+  const totalResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM ${targetTable.name}`
+  );
+  const totalResponses = parseInt(totalResult.rows[0].count);
+
+  const stats: any = {
+    surveyId: survey.id,
+    title: survey.title,
+    status: survey.status,
+    totalResponses,
+    questions: [],
+  };
+
+  for (const question of questions) {
+    if (!question.target_field_id) continue;
+
+    const field = fieldMap.get(question.target_field_id);
+    if (!field) continue;
+
+    const questionStat: any = {
+      questionId: question.id,
+      label: question.label,
+      type: question.type,
+    };
+
+    if (question.type === 'multiple_choice' || question.type === 'dropdown') {
+      const qConfig = question.config_json as Record<string, unknown>;
+      const options = (qConfig?.options as string[]) || [];
+
+      const optionCounts: Record<string, number> = {};
+      for (const opt of options) {
+        const result = await query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM ${targetTable.name} WHERE ${field.name} = $1`,
+          [opt]
+        );
+        optionCounts[opt] = parseInt(result.rows[0].count);
+      }
+
+      questionStat.distribution = optionCounts;
+    } else if (question.type === 'checkbox') {
+      const qConfig = question.config_json as Record<string, unknown>;
+      const options = (qConfig?.options as string[]) || [];
+
+      const optionCounts: Record<string, number> = {};
+      for (const opt of options) {
+        const result = await query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM ${targetTable.name} WHERE ${field.name} LIKE $1`,
+          [`%${opt}%`]
+        );
+        optionCounts[opt] = parseInt(result.rows[0].count);
+      }
+
+      questionStat.distribution = optionCounts;
+    } else if (question.type === 'rating' || question.type === 'number') {
+      const result = await query<{ avg: string | null; min: string | null; max: string | null }>(
+        `SELECT AVG(${field.name}) as avg, MIN(${field.name}) as min, MAX(${field.name}) as max FROM ${targetTable.name} WHERE ${field.name} IS NOT NULL`
+      );
+      questionStat.average = result.rows[0].avg ? parseFloat(parseFloat(result.rows[0].avg).toFixed(2)) : null;
+      questionStat.min = result.rows[0].min ? parseFloat(result.rows[0].min) : null;
+      questionStat.max = result.rows[0].max ? parseFloat(result.rows[0].max) : null;
+    } else if (question.type === 'text') {
+      const result = await query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM ${targetTable.name} WHERE ${field.name} IS NOT NULL AND ${field.name} != ''`
+      );
+      questionStat.responseCount = parseInt(result.rows[0].count);
+    } else if (question.type === 'date') {
+      const result = await query<{ earliest: string | null; latest: string | null }>(
+        `SELECT MIN(${field.name}) as earliest, MAX(${field.name}) as latest FROM ${targetTable.name} WHERE ${field.name} IS NOT NULL`
+      );
+      questionStat.earliest = result.rows[0].earliest;
+      questionStat.latest = result.rows[0].latest;
+    }
+
+    stats.questions.push(questionStat);
+  }
+
+  return stats;
 }
