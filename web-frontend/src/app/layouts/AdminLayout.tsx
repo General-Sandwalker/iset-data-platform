@@ -183,7 +183,11 @@ export function AdminLayout() {
     { title: 'Admin' },
     ...(breadcrumbMap[location.pathname]
       ? [{ title: breadcrumbMap[location.pathname] }]
-      : []),
+      : location.pathname.match(/^\/admin\/surveys\/[^/]+\/stats$/)
+        ? [{ title: 'Surveys' }, { title: 'Stats' }]
+        : location.pathname.match(/^\/admin\/surveys\/[^/]+$/)
+          ? [{ title: 'Surveys' }, { title: 'Builder' }]
+          : []),
   ];
 
   return (

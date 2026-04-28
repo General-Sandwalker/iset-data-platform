@@ -1,18 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Card, Typography, Table, Button, Space, Tag, Empty, Modal, Form, Input,
-  Select, Switch, Drawer, List, Spin, message, theme, Popconfirm, Tooltip,
-  InputNumber, Divider, Badge,
+  Select, Switch, Spin, message, theme, Popconfirm, Tooltip,
 } from 'antd';
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined, PublishOutlined,
-  RobotOutlined, LinkOutlined, BarChartOutlined, CopyOutlined,
-  CloseOutlined, ArrowUpOutlined, ArrowDownOutlined, EyeOutlined,
+  PlusOutlined, DeleteOutlined, BarChartOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { surveyApi, type Survey, type SurveyStatus } from '../../core/api/survey';
+import { surveyApi, type Survey, type SurveyStatus } from '../core/api/survey';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 export default function SurveysPage() {
   const { token } = theme.useToken();

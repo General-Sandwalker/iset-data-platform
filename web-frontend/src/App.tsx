@@ -8,6 +8,8 @@ import UserManagementPage from './admin/users';
 import DatabasePage from './admin/database';
 import ImportPage from './admin/import';
 import SurveysPage from './admin/surveys';
+import SurveyBuilderEditor from './survey-builder/SurveyBuilderEditor';
+import SurveyStatsPage from './survey-builder/SurveyStatsPage';
 import ChartsPage from './viz-builder/charts';
 import DashboardsPage from './viz-builder/dashboards';
 import ReportsPage from './report-center';
@@ -49,6 +51,8 @@ function App() {
         <Route path="/admin/database" element={<DatabasePage />} />
         <Route path="/admin/import" element={<ImportPage />} />
         <Route path="/admin/surveys" element={<SurveysPage />} />
+<Route path="/admin/surveys/:id" element={<SurveyBuilderEditor />} />
+<Route path="/admin/surveys/:id/stats" element={<SurveyStatsPage />} />
         <Route
           path="/admin/visualizations/charts"
           element={
