@@ -190,7 +190,7 @@ All API endpoints use a consistent JSON envelope:
 ### Authentication
 - JWT-based stateless sessions (24h expiry)
 - No signup endpoint — users are created by admins
-- Super admin is seeded from `.env` on first boot
+- Super admin is seeded from root `.env` on first boot (via docker-compose environment passthrough)
 - Login identifier: CIN for regular users, username for super admin
 
 ### AI Features
@@ -254,10 +254,10 @@ gh issue close 2 --comment "Implementation details..."
 
 | Purpose | Path |
 |---------|------|
-| Backend entry | `backend/src/index.ts` (to be created) |
-| Frontend entry | `web-frontend/src/main.tsx` (to be created) |
+| Backend entry | `backend/src/index.ts` |
+| Frontend entry | `web-frontend/src/main.tsx` |
 | Docker Compose | `docker-compose.yml` |
-| Environment template | `.env.example` |
+| Environment config | `.env.example` (copy to `.env` — single file at project root) |
 | Project specification | `PROJECT_SPECS.md` |
 | Initial prompt | `INITIAL_PROMPT.md` |
 

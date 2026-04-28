@@ -25,13 +25,18 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/iset_db
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
       - SUPER_ADMIN_USERNAME=${SUPER_ADMIN_USERNAME:-admin}
       - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-change-me-in-production}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - UPLOAD_MAX_SIZE=${UPLOAD_MAX_SIZE:-52428800}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
     volumes:
       - ./backend/uploads:/app/uploads
     ports:
@@ -42,10 +47,10 @@ services:
     build:
       context: ./web-frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
     depends_on:
       - backend
-    environment:
-      - VITE_API_URL=http://localhost:4000
     ports:
       - "3000:80"
 
