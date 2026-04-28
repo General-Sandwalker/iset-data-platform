@@ -2,6 +2,7 @@ import { groqChat } from '../config/groq.js';
 import { HttpError } from '../middleware/auth.js';
 import { fieldTypes, type FieldType } from '../schema-engine/service.js';
 import { questionTypes, type QuestionType } from '../survey-engine/service.js';
+import { chartTypes, type ChartType } from '../viz-engine/service.js';
 
 export interface SuggestedField {
   name: string;
@@ -254,8 +255,122 @@ Generate the survey as JSON.`;
       q.min = 1;
       q.max = q.max || 5;
     }
-    return q;
-  });
+      return q;
+    });
+
+  return parsed;
+}
+
+export interface ChartSuggestion {
+  title: string;
+  chartType: ChartType;
+  sqlQuery: string;
+  configJson: Record<string, unknown>;
+  description: string;
+}
+
+const CHART_GENERATE_SYSTEM_PROMPT = `You are a data visualization expert working on an academic observatory platform for ISET Tozeur. Generate chart definitions in JSON format based on the user's description and available table schema.
+
+You must use ONLY these chart types: ${chartTypes.join(', ')}
+
+Chart type guidelines:
+- "bar": vertical bar chart for comparing categories
+- "horizontal_bar": horizontal bar chart for comparing categories with long labels
+- "line": line chart for trends over time
+- "pie": pie chart for proportions (max 6-8 categories)
+- "donut": donut chart for proportions with center space
+- "area": area chart for cumulative trends
+- "scatter": scatter plot for correlations
+- "table": tabular data display
+- "metric": single key metric (count, average, sum)
+- "radar": radar chart for multi-dimensional comparison
+
+SQL query rules:
+- Use ONLY SELECT queries
+- The table name MUST be used exactly as provided (e.g., dt_students)
+- For aggregation, use GROUP BY with appropriate aggregate functions
+- For metric charts, return a single row with a "value" column alias
+- For bar/horizontal_bar/line/area charts, return rows with a "label" column and a "value" column
+- For pie/donut charts, return rows with a "label" column and a "value" column
+- For scatter charts, return rows with "x" and "y" column aliases
+- For table charts, return the raw data columns
+- For radar charts, return rows with "label" and "value" columns
+- Always use meaningful column aliases (AS label, AS value, AS x, AS y)
+- Use COUNT(*), AVG(), SUM(), MIN(), MAX() for aggregations
+- Keep queries simple and efficient
+
+configJson options:
+- For metric charts: { "prefix": "", "suffix": "", "decimals": 0 }
+- For bar/line/area: { "colors": ["#4e79a7", ...], "showLegend": true/false, "stacked": true/false }
+- For pie/donut: { "colors": ["#4e79a7", ...], "showLegend": true/false }
+- For table: { "columns": [{ "key": "col", "label": "Label" }] }
+
+IMPORTANT RULES:
+- Respond ONLY with valid JSON, no markdown, no code fences, no explanation
+- The output must be exactly this JSON structure:
+{
+  "title": "string",
+  "chartType": "string",
+  "sqlQuery": "string",
+  "configJson": {},
+  "description": "string"
+}
+- Use French for titles and descriptions if the context suggests a French-speaking audience
+- Ensure the SQL query is valid PostgreSQL and references the correct table name`;
+
+export async function generateChart(
+  description: string,
+  tableName: string,
+  tableDisplayName: string,
+  fields: { name: string; displayName: string; fieldType: string }[]
+): Promise<ChartSuggestion> {
+  if (!description || description.trim().length === 0) {
+    throw new HttpError(400, 'INVALID_INPUT', 'Description cannot be empty');
+  }
+
+  const fieldDescriptions = fields
+    .map(f => `  - ${f.name} (${f.fieldType}): ${f.displayName}`)
+    .join('\n');
+
+  const userMessage = `Generate a chart definition for the following request:
+
+Description: ${description}
+
+Table: ${tableName} (display name: "${tableDisplayName}")
+Fields:
+${fieldDescriptions}
+
+Generate the chart as JSON.`;
+
+  const responseText = await groqChat([
+    { role: 'system', content: CHART_GENERATE_SYSTEM_PROMPT },
+    { role: 'user', content: userMessage },
+  ]);
+
+  let parsed: ChartSuggestion;
+  try {
+    const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new HttpError(502, 'AI_PARSE_ERROR', 'Failed to parse AI response as valid JSON. Please try again.');
+  }
+
+  if (!parsed.title || !parsed.chartType || !parsed.sqlQuery) {
+    throw new HttpError(502, 'AI_INVALID_RESPONSE', 'AI response is missing required fields (title, chartType, sqlQuery). Please try again.');
+  }
+
+  const validChartTypes = new Set<string>(chartTypes);
+  if (!validChartTypes.has(parsed.chartType)) {
+    parsed.chartType = 'bar';
+  }
+
+  if (!parsed.configJson) {
+    parsed.configJson = {};
+  }
+
+  if (!parsed.description) {
+    parsed.description = parsed.title;
+  }
 
   return parsed;
 }
