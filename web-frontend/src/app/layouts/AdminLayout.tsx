@@ -336,7 +336,7 @@ export function AdminLayout() {
               <Switch
                 size="small"
                 checked={isDarkMode}
-                onChange={toggleTheme}
+                disabled
               />
             </div>
 

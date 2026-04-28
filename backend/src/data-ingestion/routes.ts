@@ -225,6 +225,19 @@ const previewSchema = z.object({
   })),
 });
 
+const previewFileSchema = z.object({
+  fileId: z.string().uuid(),
+  mappings: z.array(z.object({
+    sourceColumn: z.string(),
+    targetField: z.string(),
+    transform: z.enum(['uppercase', 'lowercase', 'trim', 'date_iso', 'date_fr', 'number', 'boolean']).optional(),
+    fieldType: z.string().optional(),
+    displayName: z.string().optional(),
+    isRequired: z.boolean().optional(),
+    configJson: z.record(z.unknown()).optional(),
+  })),
+});
+
 router.post(
   '/preview',
   authenticate,
@@ -259,6 +272,92 @@ router.post(
         validRows: preview.validRows.slice(0, 10),
         invalidRows: preview.invalidRows.slice(0, 10),
         stats: preview.stats,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/preview-new-table',
+  authenticate,
+  requireAdmin,
+  validate({ body: previewFileSchema }),
+  async (req, res, next) => {
+    try {
+      const { fileId, mappings } = req.body;
+
+      const importFile = await getImport(fileId);
+      if (!importFile.columns || importFile.columns.length === 0) {
+        throw new Error('File has no columns. Please upload a file first.');
+      }
+
+      const filePath = path.join(uploadDir, importFile.filename);
+      let allRows: Record<string, unknown>[] = [];
+
+      if (importFile.file_type === 'csv') {
+        const parsed = await parseCSV(filePath);
+        allRows = parsed.sampleRows;
+      } else if (importFile.file_type === 'excel') {
+        const parsed = await parseExcel(filePath);
+        allRows = parsed.sampleRows;
+      } else if (importFile.file_type === 'json') {
+        const parsed = await parseJSON(filePath);
+        allRows = parsed.sampleRows;
+      }
+
+      const validRows: Record<string, unknown>[] = [];
+      const invalidRows: { row: number; data: Record<string, unknown>; errors: string[] }[] = [];
+
+      for (let i = 0; i < allRows.length; i++) {
+        const sourceRow = allRows[i];
+        const mappedData: Record<string, unknown> = {};
+        const errors: string[] = [];
+
+        for (const mapping of mappings) {
+          const sourceValue = sourceRow[mapping.sourceColumn];
+          const transformedValue = applyTransform(sourceValue, mapping.transform);
+
+          if (transformedValue === undefined || transformedValue === null || transformedValue === '') {
+            if (mapping.isRequired) {
+              errors.push(`Required field "${mapping.targetField}" is empty`);
+            }
+            continue;
+          }
+
+          if (mapping.fieldType === 'number' || mapping.fieldType === 'decimal') {
+            const num = typeof transformedValue === 'number' ? transformedValue : parseFloat(String(transformedValue));
+            if (isNaN(num)) {
+              errors.push(`Value "${transformedValue}" is not a valid number`);
+              continue;
+            }
+            mappedData[mapping.targetField] = num;
+          } else if (mapping.fieldType === 'boolean') {
+            const str = String(transformedValue).toLowerCase();
+            mappedData[mapping.targetField] = ['true', '1', 'yes', 'on'].includes(str);
+          } else if (mapping.fieldType === 'date') {
+            mappedData[mapping.targetField] = String(transformedValue).slice(0, 10);
+          } else {
+            mappedData[mapping.targetField] = String(transformedValue);
+          }
+        }
+
+        if (errors.length > 0) {
+          invalidRows.push({ row: i + 1, data: sourceRow, errors });
+        } else {
+          validRows.push(mappedData);
+        }
+      }
+
+      sendSuccess(res, {
+        validRows: validRows.slice(0, 10),
+        invalidRows: invalidRows.slice(0, 10),
+        stats: {
+          totalRows: allRows.length,
+          validCount: validRows.length,
+          invalidCount: invalidRows.length,
+        },
       });
     } catch (err) {
       next(err);

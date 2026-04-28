@@ -87,6 +87,11 @@ export const importApi = {
     return response.data;
   },
 
+  async previewNewTable(fileId: string, mappings: ColumnMapping[]): Promise<ApiResponse<PreviewResult>> {
+    const response = await apiClient.post('/import/preview-new-table', { fileId, mappings });
+    return response.data;
+  },
+
   async execute(fileId: string, tableId: string, mappings: ColumnMapping[], skipDuplicates?: boolean): Promise<ApiResponse<ExecuteResult>> {
     const response = await apiClient.post('/import/execute', { fileId, tableId, mappings, skipDuplicates });
     return response.data;

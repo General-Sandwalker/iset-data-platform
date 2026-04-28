@@ -144,22 +144,40 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
       message.warning('Please map at least one column');
       return;
     }
-    if (!selectedTableId) {
-      message.warning('Please select a target table');
-      return;
-    }
-
-    setIsPreviewLoading(true);
-    try {
-      const result = await importApi.preview(uploadResult!.id, selectedTableId, validMappings);
-      if (result.success && result.data) {
-        setPreviewResult(result.data);
-        setStep(3);
+    if (importMode === 'existing') {
+      if (!selectedTableId) {
+        message.warning('Please select a target table');
+        return;
       }
-    } catch (err: any) {
-      message.error(err?.response?.data?.error?.message || 'Preview failed');
-    } finally {
-      setIsPreviewLoading(false);
+      setIsPreviewLoading(true);
+      try {
+        const result = await importApi.preview(uploadResult!.id, selectedTableId, validMappings);
+        if (result.success && result.data) {
+          setPreviewResult(result.data);
+          setStep(3);
+        }
+      } catch (err: any) {
+        message.error(err?.response?.data?.error?.message || 'Preview failed');
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    } else {
+      if (!newTableName) {
+        message.warning('Please enter a table name');
+        return;
+      }
+      setIsPreviewLoading(true);
+      try {
+        const result = await importApi.previewNewTable(uploadResult!.id, validMappings);
+        if (result.success && result.data) {
+          setPreviewResult(result.data);
+          setStep(3);
+        }
+      } catch (err: any) {
+        message.error(err?.response?.data?.error?.message || 'Preview failed');
+      } finally {
+        setIsPreviewLoading(false);
+      }
     }
   };
 
