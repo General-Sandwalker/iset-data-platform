@@ -52,4 +52,44 @@ export const analyticsApi = {
     const response = await apiClient.post('/analytics/academic/mappings', { key, tableId });
     return response.data;
   },
+
+  async getInsertionRates(params?: {
+    promotion?: string;
+    filiere?: string;
+    anneeDebut?: string;
+    anneeFin?: string;
+  }): Promise<ApiResponse<any>> {
+    const response = await apiClient.get('/analytics/insertion/rates', { params });
+    return response.data;
+  },
+
+  async getInsertionDelays(params?: {
+    promotion?: string;
+    filiere?: string;
+    anneeDebut?: string;
+    anneeFin?: string;
+  }): Promise<ApiResponse<any>> {
+    const response = await apiClient.get('/analytics/insertion/delays', { params });
+    return response.data;
+  },
+
+  async getInsertionSectors(params?: {
+    promotion?: string;
+    filiere?: string;
+    anneeDebut?: string;
+    anneeFin?: string;
+  }): Promise<ApiResponse<any>> {
+    const response = await apiClient.get('/analytics/insertion/sectors', { params });
+    return response.data;
+  },
+
+  async getInsertionContracts(params?: {
+    promotion?: string;
+    filiere?: string;
+    anneeDebut?: string;
+    anneeFin?: string;
+  }): Promise<ApiResponse<any>> {
+    const response = await apiClient.get('/analytics/insertion/contracts', { params });
+    return response.data;
+  },
 };
