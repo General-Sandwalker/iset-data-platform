@@ -12,6 +12,10 @@ import {
   getTeacherStats,
   getFormationStats,
   getEventStats,
+  getInsertionRates,
+  getInsertionDelays,
+  getInsertionSectors,
+  getInsertionContracts,
   getAcademicTableMappings,
   setAcademicTableMapping,
 } from './service.js';
@@ -48,12 +52,24 @@ const eventFilterSchema = z.object({
 
 type EventFilter = z.infer<typeof eventFilterSchema>;
 
+const insertionFilterSchema = z.object({
+  promotion: z.string().optional(),
+  filiere: z.string().optional(),
+  anneeDebut: z.string().optional(),
+  anneeFin: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+type InsertionFilter = z.infer<typeof insertionFilterSchema>;
+
 const mappingSchema = z.object({
   key: z.enum([
     'analytics_students_table',
     'analytics_teachers_table',
     'analytics_formations_table',
     'analytics_events_table',
+    'analytics_alumni_table',
   ]),
   tableId: z.string().uuid(),
 });
@@ -104,6 +120,38 @@ router.get('/academic/events', requireManager, validate({ query: eventFilterSche
   try {
     const q = req.query as unknown as EventFilter;
     const result = await getEventStats(q);
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+});
+
+router.get('/insertion/rates', requireManager, validate({ query: insertionFilterSchema }), async (req, res, next) => {
+  try {
+    const q = req.query as unknown as InsertionFilter;
+    const result = await getInsertionRates(q);
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+});
+
+router.get('/insertion/delays', requireManager, validate({ query: insertionFilterSchema }), async (req, res, next) => {
+  try {
+    const q = req.query as unknown as InsertionFilter;
+    const result = await getInsertionDelays(q);
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+});
+
+router.get('/insertion/sectors', requireManager, validate({ query: insertionFilterSchema }), async (req, res, next) => {
+  try {
+    const q = req.query as unknown as InsertionFilter;
+    const result = await getInsertionSectors(q);
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+});
+
+router.get('/insertion/contracts', requireManager, validate({ query: insertionFilterSchema }), async (req, res, next) => {
+  try {
+    const q = req.query as unknown as InsertionFilter;
+    const result = await getInsertionContracts(q);
     sendSuccess(res, result);
   } catch (err) { next(err); }
 });

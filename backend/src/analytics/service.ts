@@ -391,12 +391,348 @@ export async function getEventStats(filters: {
   };
 }
 
+interface InsertionFilters {
+  promotion?: string;
+  filiere?: string;
+  anneeDebut?: string;
+  anneeFin?: string;
+  page?: number;
+  limit?: number;
+}
+
+function buildInsertionWhereClause(
+  filters: InsertionFilters,
+  paramIndex: { value: number }
+): { clauses: string[]; values: any[] } {
+  const clauses: string[] = [];
+  const values: any[] = [];
+
+  if (filters.promotion) {
+    clauses.push(`promotion = $${paramIndex.value++}`);
+    values.push(filters.promotion);
+  }
+  if (filters.filiere) {
+    clauses.push(`filiere = $${paramIndex.value++}`);
+    values.push(filters.filiere);
+  }
+  if (filters.anneeDebut) {
+    clauses.push(`annee_universitaire >= $${paramIndex.value++}`);
+    values.push(filters.anneeDebut);
+  }
+  if (filters.anneeFin) {
+    clauses.push(`annee_universitaire <= $${paramIndex.value++}`);
+    values.push(filters.anneeFin);
+  }
+
+  return { clauses, values };
+}
+
+export async function getInsertionRates(filters: InsertionFilters): Promise<any> {
+  const alumniTable = await resolveTableName('analytics_alumni_table');
+  if (!alumniTable) {
+    throw new HttpError(400, 'ANALYTICS_NOT_CONFIGURED', 'Alumni table not configured in system settings. Set analytics_alumni_table key.');
+  }
+
+  const paramIndex = { value: 1 };
+  const { clauses, values } = buildInsertionWhereClause(filters, paramIndex);
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const totalResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM ${alumniTable} ${where}`,
+    values
+  );
+  const total = parseInt(totalResult.rows[0].count);
+
+  const inserted6mResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} insertion_6_mois = true`,
+    values
+  );
+  const inserted6m = parseInt(inserted6mResult.rows[0].count);
+
+  const inserted12mResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} insertion_12_mois = true`,
+    values
+  );
+  const inserted12m = parseInt(inserted12mResult.rows[0].count);
+
+  const rate6m = total > 0 ? parseFloat(((inserted6m / total) * 100).toFixed(2)) : 0;
+  const rate12m = total > 0 ? parseFloat(((inserted12m / total) * 100).toFixed(2)) : 0;
+
+  const byPromotion = await query(
+    `SELECT promotion,
+       COUNT(*) as total,
+       SUM(CASE WHEN insertion_6_mois = true THEN 1 ELSE 0 END) as inserted_6m,
+       SUM(CASE WHEN insertion_12_mois = true THEN 1 ELSE 0 END) as inserted_12m
+     FROM ${alumniTable}
+     WHERE promotion IS NOT NULL
+     GROUP BY promotion
+     ORDER BY promotion DESC`,
+  );
+
+  const byFiliere = await query(
+    `SELECT filiere,
+       COUNT(*) as total,
+       SUM(CASE WHEN insertion_6_mois = true THEN 1 ELSE 0 END) as inserted_6m,
+       SUM(CASE WHEN insertion_12_mois = true THEN 1 ELSE 0 END) as inserted_12m
+     FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} filiere IS NOT NULL
+     GROUP BY filiere
+     ORDER BY total DESC`,
+    values
+  );
+
+  const byYear = await query(
+    `SELECT annee_universitaire,
+       COUNT(*) as total,
+       SUM(CASE WHEN insertion_6_mois = true THEN 1 ELSE 0 END) as inserted_6m,
+       SUM(CASE WHEN insertion_12_mois = true THEN 1 ELSE 0 END) as inserted_12m
+     FROM ${alumniTable}
+     WHERE annee_universitaire IS NOT NULL
+     GROUP BY annee_universitaire
+     ORDER BY annee_universitaire DESC`,
+  );
+
+  return {
+    total,
+    inserted6m,
+    inserted12m,
+    rate6m,
+    rate12m,
+    byPromotion: byPromotion.rows.map((r: any) => ({
+      ...r,
+      total: parseInt(r.total),
+      inserted_6m: parseInt(r.inserted_6m),
+      inserted_12m: parseInt(r.inserted_12m),
+      rate_6m: parseInt(r.total) > 0 ? parseFloat(((parseInt(r.inserted_6m) / parseInt(r.total)) * 100).toFixed(2)) : 0,
+      rate_12m: parseInt(r.total) > 0 ? parseFloat(((parseInt(r.inserted_12m) / parseInt(r.total)) * 100).toFixed(2)) : 0,
+    })),
+    byFiliere: byFiliere.rows.map((r: any) => ({
+      ...r,
+      total: parseInt(r.total),
+      inserted_6m: parseInt(r.inserted_6m),
+      inserted_12m: parseInt(r.inserted_12m),
+      rate_6m: parseInt(r.total) > 0 ? parseFloat(((parseInt(r.inserted_6m) / parseInt(r.total)) * 100).toFixed(2)) : 0,
+      rate_12m: parseInt(r.total) > 0 ? parseFloat(((parseInt(r.inserted_12m) / parseInt(r.total)) * 100).toFixed(2)) : 0,
+    })),
+    byYear: byYear.rows.map((r: any) => ({
+      ...r,
+      total: parseInt(r.total),
+      inserted_6m: parseInt(r.inserted_6m),
+      inserted_12m: parseInt(r.inserted_12m),
+      rate_6m: parseInt(r.total) > 0 ? parseFloat(((parseInt(r.inserted_6m) / parseInt(r.total)) * 100).toFixed(2)) : 0,
+      rate_12m: parseInt(r.total) > 0 ? parseFloat(((parseInt(r.inserted_12m) / parseInt(r.total)) * 100).toFixed(2)) : 0,
+    })),
+  };
+}
+
+export async function getInsertionDelays(filters: InsertionFilters): Promise<any> {
+  const alumniTable = await resolveTableName('analytics_alumni_table');
+  if (!alumniTable) {
+    throw new HttpError(400, 'ANALYTICS_NOT_CONFIGURED', 'Alumni table not configured in system settings. Set analytics_alumni_table key.');
+  }
+
+  const paramIndex = { value: 1 };
+  const { clauses, values } = buildInsertionWhereClause(filters, paramIndex);
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const overallResult = await query<{ avg_delay: string | null; min_delay: string | null; max_delay: string | null; count: string }>(
+    `SELECT AVG(delai_emploi) as avg_delay, MIN(delai_emploi) as min_delay, MAX(delai_emploi) as max_delay, COUNT(delai_emploi) as count
+     FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} delai_emploi IS NOT NULL`,
+    values
+  );
+
+  const overall = overallResult.rows[0];
+
+  const distribution = await query(
+    `SELECT delai_emploi, COUNT(*) as count
+     FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} delai_emploi IS NOT NULL
+     GROUP BY delai_emploi
+     ORDER BY delai_emploi`,
+    values
+  );
+
+  const byFiliere = await query(
+    `SELECT filiere,
+       AVG(delai_emploi) as avg_delay,
+       MIN(delai_emploi) as min_delay,
+       MAX(delai_emploi) as max_delay,
+       COUNT(delai_emploi) as count
+     FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} delai_emploi IS NOT NULL AND filiere IS NOT NULL
+     GROUP BY filiere
+     ORDER BY avg_delay ASC`,
+    values
+  );
+
+  const byPromotion = await query(
+    `SELECT promotion,
+       AVG(delai_emploi) as avg_delay,
+       MIN(delai_emploi) as min_delay,
+       MAX(delai_emploi) as max_delay,
+       COUNT(delai_emploi) as count
+     FROM ${alumniTable}
+     WHERE delai_emploi IS NOT NULL AND promotion IS NOT NULL
+     GROUP BY promotion
+     ORDER BY promotion DESC`,
+  );
+
+  return {
+    overall: {
+      avgDelay: overall.avg_delay ? parseFloat(parseFloat(overall.avg_delay).toFixed(2)) : null,
+      minDelay: overall.min_delay ? parseFloat(overall.min_delay) : null,
+      maxDelay: overall.max_delay ? parseFloat(overall.max_delay) : null,
+      count: parseInt(overall.count),
+    },
+    distribution: distribution.rows.map((r: any) => ({
+      delai: parseFloat(r.delai_emploi),
+      count: parseInt(r.count),
+    })),
+    byFiliere: byFiliere.rows.map((r: any) => ({
+      filiere: r.filiere,
+      avgDelay: r.avg_delay ? parseFloat(parseFloat(r.avg_delay).toFixed(2)) : null,
+      minDelay: r.min_delay ? parseFloat(r.min_delay) : null,
+      maxDelay: r.max_delay ? parseFloat(r.max_delay) : null,
+      count: parseInt(r.count),
+    })),
+    byPromotion: byPromotion.rows.map((r: any) => ({
+      promotion: r.promotion,
+      avgDelay: r.avg_delay ? parseFloat(parseFloat(r.avg_delay).toFixed(2)) : null,
+      minDelay: r.min_delay ? parseFloat(r.min_delay) : null,
+      maxDelay: r.max_delay ? parseFloat(r.max_delay) : null,
+      count: parseInt(r.count),
+    })),
+  };
+}
+
+export async function getInsertionSectors(filters: InsertionFilters): Promise<any> {
+  const alumniTable = await resolveTableName('analytics_alumni_table');
+  if (!alumniTable) {
+    throw new HttpError(400, 'ANALYTICS_NOT_CONFIGURED', 'Alumni table not configured in system settings. Set analytics_alumni_table key.');
+  }
+
+  const paramIndex = { value: 1 };
+  const { clauses, values } = buildInsertionWhereClause(filters, paramIndex);
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const totalResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} secteur_activite IS NOT NULL`,
+    values
+  );
+  const total = parseInt(totalResult.rows[0].count);
+
+  const bySector = await query(
+    `SELECT secteur_activite, COUNT(*) as count
+     FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} secteur_activite IS NOT NULL
+     GROUP BY secteur_activite
+     ORDER BY count DESC`,
+    values
+  );
+
+  const byFiliere = await query(
+    `SELECT filiere, secteur_activite, COUNT(*) as count
+     FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} secteur_activite IS NOT NULL AND filiere IS NOT NULL
+     GROUP BY filiere, secteur_activite
+     ORDER BY filiere, count DESC`,
+    values
+  );
+
+  const byPromotion = await query(
+    `SELECT promotion, secteur_activite, COUNT(*) as count
+     FROM ${alumniTable}
+     WHERE secteur_activite IS NOT NULL AND promotion IS NOT NULL
+     GROUP BY promotion, secteur_activite
+     ORDER BY promotion DESC, count DESC`,
+  );
+
+  const sectorsWithRate = bySector.rows.map((r: any) => ({
+    secteur: r.secteur_activite,
+    count: parseInt(r.count),
+    rate: total > 0 ? parseFloat(((parseInt(r.count) / total) * 100).toFixed(2)) : 0,
+  }));
+
+  return {
+    total,
+    bySector: sectorsWithRate,
+    byFiliere: byFiliere.rows.map((r: any) => ({
+      filiere: r.filiere,
+      secteur: r.secteur_activite,
+      count: parseInt(r.count),
+    })),
+    byPromotion: byPromotion.rows.map((r: any) => ({
+      promotion: r.promotion,
+      secteur: r.secteur_activite,
+      count: parseInt(r.count),
+    })),
+  };
+}
+
+export async function getInsertionContracts(filters: InsertionFilters): Promise<any> {
+  const alumniTable = await resolveTableName('analytics_alumni_table');
+  if (!alumniTable) {
+    throw new HttpError(400, 'ANALYTICS_NOT_CONFIGURED', 'Alumni table not configured in system settings. Set analytics_alumni_table key.');
+  }
+
+  const paramIndex = { value: 1 };
+  const { clauses, values } = buildInsertionWhereClause(filters, paramIndex);
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const totalResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} type_contrat IS NOT NULL`,
+    values
+  );
+  const total = parseInt(totalResult.rows[0].count);
+
+  const byContract = await query(
+    `SELECT type_contrat, COUNT(*) as count
+     FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} type_contrat IS NOT NULL
+     GROUP BY type_contrat
+     ORDER BY count DESC`,
+    values
+  );
+
+  const byFiliere = await query(
+    `SELECT filiere, type_contrat, COUNT(*) as count
+     FROM ${alumniTable} ${where} ${clauses.length > 0 ? 'AND' : 'WHERE'} type_contrat IS NOT NULL AND filiere IS NOT NULL
+     GROUP BY filiere, type_contrat
+     ORDER BY filiere, count DESC`,
+    values
+  );
+
+  const byPromotion = await query(
+    `SELECT promotion, type_contrat, COUNT(*) as count
+     FROM ${alumniTable}
+     WHERE type_contrat IS NOT NULL AND promotion IS NOT NULL
+     GROUP BY promotion, type_contrat
+     ORDER BY promotion DESC, count DESC`,
+  );
+
+  const contractsWithRate = byContract.rows.map((r: any) => ({
+    typeContrat: r.type_contrat,
+    count: parseInt(r.count),
+    rate: total > 0 ? parseFloat(((parseInt(r.count) / total) * 100).toFixed(2)) : 0,
+  }));
+
+  return {
+    total,
+    byContract: contractsWithRate,
+    byFiliere: byFiliere.rows.map((r: any) => ({
+      filiere: r.filiere,
+      typeContrat: r.type_contrat,
+      count: parseInt(r.count),
+    })),
+    byPromotion: byPromotion.rows.map((r: any) => ({
+      promotion: r.promotion,
+      typeContrat: r.type_contrat,
+      count: parseInt(r.count),
+    })),
+  };
+}
+
 export async function getAcademicTableMappings(): Promise<Record<string, string | null>> {
   const keys = [
     'analytics_students_table',
     'analytics_teachers_table',
     'analytics_formations_table',
     'analytics_events_table',
+    'analytics_alumni_table',
   ];
 
   const mappings: Record<string, string | null> = {};
@@ -414,6 +750,7 @@ export async function setAcademicTableMapping(key: string, tableId: string): Pro
     'analytics_teachers_table',
     'analytics_formations_table',
     'analytics_events_table',
+    'analytics_alumni_table',
   ];
 
   if (!allowedKeys.includes(key)) {
