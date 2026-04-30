@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.js';
 import { requireAdmin, requireManager } from '../middleware/rbac.js';
 import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
+import { aiLimiter } from '../middleware/rate-limit.js';
 import {
   createTemplate,
   listTemplates,
@@ -15,6 +16,7 @@ import {
   listGeneratedReports,
   getGeneratedReportById,
   previewFilledTemplate,
+  generateReport,
   reportStatuses,
 } from './service.js';
 
@@ -45,6 +47,12 @@ const createReportSchema = z.object({
 
 const previewSchema = z.object({
   sampleData: z.record(z.any()),
+});
+
+const generateReportSchema = z.object({
+  templateId: z.string().uuid(),
+  cin: z.string().min(1).max(50),
+  filters: z.record(z.any()).optional(),
 });
 
 const listReportsQuerySchema = z.object({
@@ -174,6 +182,25 @@ router.get('/reports/:id', requireManager, validate({ params: uuidParam }), asyn
   try {
     const report = await getGeneratedReportById(req.params.id);
     sendSuccess(res, report);
+  } catch (err) { next(err); }
+});
+
+router.post('/reports/generate', requireManager, aiLimiter, validate({ body: generateReportSchema }), async (req, res, next) => {
+  try {
+    const report = await generateReport({
+      templateId: req.body.templateId,
+      cin: req.body.cin,
+      filters: req.body.filters,
+    });
+    await logActivity({
+      userId: req.user!.id,
+      action: 'AI_GENERATE_REPORT',
+      entityType: 'generated_report',
+      entityId: report.id,
+      ipAddress: req.ip,
+      metadata: { templateId: req.body.templateId, cin: req.body.cin },
+    });
+    sendCreated(res, report);
   } catch (err) { next(err); }
 });
 

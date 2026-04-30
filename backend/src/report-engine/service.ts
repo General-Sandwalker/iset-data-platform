@@ -1,6 +1,7 @@
 import { query, getClient } from '../config/database.js';
 import { HttpError } from '../middleware/auth.js';
-import { getTableById } from '../schema-engine/service.js';
+import { getTableById, listTables, listFields } from '../schema-engine/service.js';
+import { groqChat } from '../config/groq.js';
 
 export const reportStatuses = ['generated', 'exported', 'failed'] as const;
 export type ReportStatus = (typeof reportStatuses)[number];
@@ -247,4 +248,115 @@ export async function previewFilledTemplate(
   const filledTemplate = fillPlaceholders(template.prompt_template, sampleData);
 
   return { filledTemplate, placeholders, missing };
+}
+
+const REPORT_GENERATE_SYSTEM_PROMPT = `You are an academic advisor writing student performance reports for ISET Tozeur. Based strictly on the provided student data, write a professional report with sections: Summary, Academic Performance, Strengths, Areas for Improvement, Recommendations. Do not invent data. Use formal academic tone. Respond in structured JSON with sections: [{ title, content }]. If data is in French, respond in French.`;
+
+export interface ReportSection {
+  title: string;
+  content: string;
+}
+
+async function fetchStudentContext(cin: string): Promise<Record<string, any>> {
+  const tables = await listTables();
+  const userLinkedTables = tables.filter((t) => t.is_user_linked);
+
+  const context: Record<string, any> = {};
+
+  for (const table of userLinkedTables) {
+    try {
+      const fields = await listFields(table.id);
+      const hasCin = fields.some((f) => f.name === 'cin');
+      if (!hasCin) continue;
+
+      const result = await query(
+        `SELECT * FROM ${table.name} WHERE cin = $1 ORDER BY created_at DESC LIMIT 50`,
+        [cin]
+      );
+
+      if (result.rows.length > 0) {
+        context[table.display_name || table.name] = result.rows;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return context;
+}
+
+export async function generateReport(data: {
+  templateId: string;
+  cin: string;
+  filters?: Record<string, any>;
+}): Promise<GeneratedReport> {
+  const template = await getTemplateById(data.templateId);
+
+  const studentContext = await fetchStudentContext(data.cin);
+
+  if (Object.keys(studentContext).length === 0) {
+    throw new HttpError(404, 'NO_STUDENT_DATA', 'No data found for the provided CIN across user-linked tables.');
+  }
+
+  const filledPrompt = fillPlaceholders(template.prompt_template, {
+    cin: data.cin,
+    ...studentContext,
+    ...(data.filters || {}),
+  });
+
+  const contextSummary = Object.entries(studentContext)
+    .map(([tableName, rows]) => {
+      const rowArray = rows as Record<string, any>[];
+      return `### ${tableName} (${rowArray.length} records)\n${JSON.stringify(rowArray.slice(0, 20), null, 2)}`;
+    })
+    .join('\n\n');
+
+  const userMessage = `Student CIN: ${data.cin}
+
+## Available Student Data
+${contextSummary}
+
+## Report Instructions
+${filledPrompt}
+
+Generate the report as JSON.`;
+
+  let responseText: string;
+  try {
+    responseText = await groqChat([
+      { role: 'system', content: REPORT_GENERATE_SYSTEM_PROMPT },
+      { role: 'user', content: userMessage },
+    ]);
+  } catch (err: any) {
+    throw new HttpError(502, 'AI_ERROR', `Groq API error: ${err.message}`);
+  }
+
+  let sections: ReportSection[];
+  try {
+    const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    sections = JSON.parse(cleaned);
+  } catch {
+    throw new HttpError(502, 'AI_PARSE_ERROR', 'Failed to parse AI response as valid JSON. Please try again.');
+  }
+
+  if (!Array.isArray(sections) || sections.length === 0) {
+    throw new HttpError(502, 'AI_INVALID_RESPONSE', 'AI response is not a valid array of sections. Please try again.');
+  }
+
+  const validSections = sections.filter(
+    (s) => s && typeof s.title === 'string' && typeof s.content === 'string'
+  );
+
+  if (validSections.length === 0) {
+    throw new HttpError(502, 'AI_INVALID_RESPONSE', 'AI response contains no valid sections. Please try again.');
+  }
+
+  const report = await createGeneratedReport({
+    templateId: data.templateId,
+    userCin: data.cin,
+    content: { sections: validSections },
+    status: 'generated',
+  });
+
+  return report;
 }
