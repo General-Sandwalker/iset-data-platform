@@ -18,6 +18,7 @@ import surveyRoutes from './survey-engine/routes.js';
 import { publicSurveyRoutes } from './survey-engine/public-routes.js';
 import { vizRoutes, publicVizRoutes } from './viz-engine/routes.js';
 import analyticsRoutes from './analytics/routes.js';
+import reportRoutes from './report-engine/routes.js';
 import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
@@ -52,6 +53,7 @@ apiRouter.use('/import', importRoutes);
 apiRouter.use('/surveys', surveyRoutes);
   apiRouter.use('/viz', vizRoutes);
   apiRouter.use('/analytics', analyticsRoutes);
+  apiRouter.use('/reports', reportRoutes);
   apiRouter.use('/ai', aiLimiter, aiRoutes);
 
 app.use('/api/v1', apiRouter);

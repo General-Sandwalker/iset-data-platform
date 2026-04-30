@@ -5,8 +5,8 @@
 **Total Phases:** 11
 **Completed Phases:** 5
 **Total Issues:** 62
-**Completed Issues:** 30
-**In Progress:** Phase 7 (4/4 done)
+**Completed Issues:** 31
+**In Progress:** Phase 8 (1/5 done)
 
 ---
 
@@ -98,7 +98,7 @@
 
 | # | Issue | Status | Closed |
 |---|-------|--------|--------|
-| 36 | Implement report template API | 🔄 Pending | — |
+| 36 | Implement report template API | ✅ Done | 2026-04-30 |
 | 37 | Implement AI report generation service | 🔄 Pending | — |
 | 38 | Implement PDF and Excel export API | 🔄 Pending | — |
 | 39 | Build report center frontend | 🔄 Pending | — |
