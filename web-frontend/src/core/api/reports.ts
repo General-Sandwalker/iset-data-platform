@@ -97,4 +97,33 @@ export const reportsApi = {
     const response = await apiClient.post('/reports/reports/generate', data);
     return response.data;
   },
+
+  async batchGenerateReports(data: {
+    templateId: string;
+    cins: string[];
+    filters?: Record<string, unknown>;
+  }): Promise<ApiResponse<{
+    results: { cin: string; status: 'success' | 'failed'; reportId?: string; error?: string }[];
+    total: number;
+    succeeded: number;
+    failed: number;
+  }>> {
+    const response = await apiClient.post('/reports/reports/batch-generate', data);
+    return response.data;
+  },
+
+  async batchExportZip(reportIds: string[]): Promise<ApiResponse<{ downloadUrl: string; fileName: string }>> {
+    const response = await apiClient.post('/reports/reports/batch-zip', { reportIds });
+    return response.data;
+  },
+
+  async exportPdf(reportId: string): Promise<ApiResponse<{ downloadUrl: string; fileName: string }>> {
+    const response = await apiClient.post(`/reports/reports/${reportId}/export/pdf`);
+    return response.data;
+  },
+
+  async exportExcel(reportId: string): Promise<ApiResponse<{ downloadUrl: string; fileName: string }>> {
+    const response = await apiClient.post(`/reports/reports/${reportId}/export/excel`);
+    return response.data;
+  },
 };

@@ -17,12 +17,14 @@ import {
   getGeneratedReportById,
   previewFilledTemplate,
   generateReport,
+  batchGenerateReports,
   reportStatuses,
 } from './service.js';
 import {
   exportReportPdf,
   exportReportExcel,
   getReportHtmlPreview,
+  exportReportsZip,
 } from './export-service.js';
 
 const router = Router();
@@ -58,6 +60,16 @@ const generateReportSchema = z.object({
   templateId: z.string().uuid(),
   cin: z.string().min(1).max(50),
   filters: z.record(z.any()).optional(),
+});
+
+const batchGenerateSchema = z.object({
+  templateId: z.string().uuid(),
+  cins: z.array(z.string().min(1).max(50)).min(1).max(50),
+  filters: z.record(z.any()).optional(),
+});
+
+const batchZipSchema = z.object({
+  reportIds: z.array(z.string().uuid()).min(1).max(100),
 });
 
 const listReportsQuerySchema = z.object({
@@ -206,6 +218,39 @@ router.post('/reports/generate', requireManager, aiLimiter, validate({ body: gen
       metadata: { templateId: req.body.templateId, cin: req.body.cin },
     });
     sendCreated(res, report);
+  } catch (err) { next(err); }
+});
+
+router.post('/reports/batch-generate', requireAdmin, aiLimiter, validate({ body: batchGenerateSchema }), async (req, res, next) => {
+  try {
+    const result = await batchGenerateReports({
+      templateId: req.body.templateId,
+      cins: req.body.cins,
+      filters: req.body.filters,
+    });
+    await logActivity({
+      userId: req.user!.id,
+      action: 'BATCH_GENERATE_REPORTS',
+      entityType: 'generated_report',
+      entityId: req.body.templateId,
+      ipAddress: req.ip,
+      metadata: { templateId: req.body.templateId, total: result.total, succeeded: result.succeeded, failed: result.failed },
+    });
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+});
+
+router.post('/reports/batch-zip', requireManager, validate({ body: batchZipSchema }), async (req, res, next) => {
+  try {
+    const { fileName } = await exportReportsZip(req.body.reportIds);
+    await logActivity({
+      userId: req.user!.id,
+      action: 'BATCH_EXPORT_REPORTS_ZIP',
+      entityType: 'generated_report',
+      entityId: req.body.reportIds.join(','),
+      ipAddress: req.ip,
+    });
+    sendSuccess(res, { downloadUrl: `/exports/${fileName}`, fileName });
   } catch (err) { next(err); }
 });
 

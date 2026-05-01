@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
+import archiver from 'archiver';
 import { getGeneratedReportById, getTemplateById, type GeneratedReport, type ReportSection } from './service.js';
 
 const EXPORTS_DIR = path.join(process.cwd(), 'uploads', 'exports');
@@ -189,4 +190,48 @@ export function cleanupOldExports(maxAgeHours: number = 24): number {
   }
 
   return deleted;
+}
+
+export async function exportReportsZip(reportIds: string[]): Promise<{ filePath: string; fileName: string }> {
+  ensureExportsDir();
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+  const zipFileName = `batch_reports_${timestamp}.zip`;
+  const zipPath = path.join(EXPORTS_DIR, zipFileName);
+
+  const pdfs: { pdfPath: string; pdfName: string }[] = [];
+
+  for (const reportId of reportIds) {
+    try {
+      const result = await exportReportPdf(reportId);
+      pdfs.push({ pdfPath: result.filePath, pdfName: result.fileName });
+    } catch {
+      continue;
+    }
+  }
+
+  if (pdfs.length === 0) {
+    throw new Error('No PDFs could be generated for the provided report IDs');
+  }
+
+  return new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', () => {
+      for (const pdf of pdfs) {
+        try { fs.unlinkSync(pdf.pdfPath); } catch { /* ignore */ }
+      }
+      resolve({ filePath: zipPath, fileName: zipFileName });
+    });
+
+    archive.on('error', reject);
+    archive.pipe(output);
+
+    for (const pdf of pdfs) {
+      archive.file(pdf.pdfPath, { name: pdf.pdfName });
+    }
+
+    archive.finalize();
+  });
 }

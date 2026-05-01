@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   Card, Typography, theme, Row, Col, Table, Button, Space, Modal, Form,
-  Input, Select, Tag, message, Spin, Empty, Popconfirm, Tooltip,
+  Input, Select, Tag, message, Spin, Empty, Popconfirm, Tooltip, Progress,
 } from 'antd';
 import {
   PlusOutlined, FileTextOutlined, RobotOutlined, EyeOutlined,
   DeleteOutlined, EditOutlined, ReloadOutlined, SearchOutlined,
-  ThunderboltOutlined, CopyOutlined,
+  ThunderboltOutlined, CopyOutlined, TeamOutlined, DownloadOutlined,
 } from '@ant-design/icons';
 import { reportsApi, type ReportTemplate, type GeneratedReport, type ReportSection } from '../core/api/reports';
 import { schemaApi, type DynamicTable } from '../core/api/schema';
@@ -29,6 +29,13 @@ export default function ReportsPage() {
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [generateForm] = Form.useForm();
   const [generating, setGenerating] = useState(false);
+
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchForm] = Form.useForm();
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ total: number; succeeded: number; failed: number; results: { cin: string; status: string; error?: string }[] } | null>(null);
+
+  const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
 
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewReport, setPreviewReport] = useState<GeneratedReport | null>(null);
@@ -202,6 +209,57 @@ export default function ReportsPage() {
     message.success('Exported as CSV');
   };
 
+  const handleOpenBatch = () => {
+    batchForm.resetFields();
+    setBatchProgress(null);
+    setBatchModalOpen(true);
+  };
+
+  const handleBatchGenerate = async () => {
+    try {
+      const values = await batchForm.validateFields();
+      const cins: string[] = values.cins
+        .split(/[\n,;]+/)
+        .map((c: string) => c.trim())
+        .filter((c: string) => c.length > 0);
+      if (cins.length === 0) { message.warning('Enter at least one CIN'); return; }
+      if (cins.length > 50) { message.warning('Maximum 50 CINs per batch'); return; }
+      setBatchRunning(true);
+      setBatchProgress({ total: cins.length, succeeded: 0, failed: 0, results: [] });
+      const res = await reportsApi.batchGenerateReports({
+        templateId: values.templateId,
+        cins,
+      });
+      if (res.success && res.data) {
+        setBatchProgress(res.data);
+        if (res.data.succeeded > 0) message.success(`${res.data.succeeded} reports generated`);
+        if (res.data.failed > 0) message.warning(`${res.data.failed} reports failed`);
+        loadData();
+      }
+    } catch (err: any) {
+      if (err?.response?.data?.error?.message) message.error(err.response.data.error.message);
+      else if (!err?.errorFields) message.error('Batch generation failed');
+    } finally {
+      setBatchRunning(false);
+    }
+  };
+
+  const handleBatchZip = async () => {
+    if (selectedReportIds.length === 0) { message.warning('Select reports to export'); return; }
+    try {
+      const res = await reportsApi.batchExportZip(selectedReportIds);
+      if (res.success && res.data) {
+        const a = document.createElement('a');
+        a.href = res.data.downloadUrl;
+        a.download = res.data.fileName;
+        a.click();
+        message.success('ZIP download started');
+      }
+    } catch (err: any) {
+      message.error(err?.response?.data?.error?.message || 'ZIP export failed');
+    }
+  };
+
   const extractPlaceholders = (template: string): string[] => {
     const matches = template.match(/\{\{(\w+)\}\}/g);
     if (!matches) return [];
@@ -372,11 +430,21 @@ export default function ReportsPage() {
                   New Template
                 </Button>
               )}
-              {activeTab === 'history' && (
-                <Button icon={<RobotOutlined />} onClick={() => handleOpenGenerate()} style={{ borderRadius: 10 }}>
-                  Generate Report
-                </Button>
-              )}
+        {activeTab === 'history' && (
+          <Button icon={<RobotOutlined />} onClick={() => handleOpenGenerate()} style={{ borderRadius: 10 }}>
+            Generate Report
+          </Button>
+        )}
+        {activeTab === 'history' && (
+          <Button icon={<TeamOutlined />} onClick={handleOpenBatch} style={{ borderRadius: 10 }}>
+            Batch Generate
+          </Button>
+        )}
+        {activeTab === 'history' && selectedReportIds.length > 0 && (
+          <Button type="primary" icon={<DownloadOutlined />} onClick={handleBatchZip} style={{ borderRadius: 10 }}>
+            Download ZIP ({selectedReportIds.length})
+          </Button>
+        )}
               <Button icon={<ReloadOutlined />} onClick={loadData} />
             </Space>
           </Col>
@@ -412,9 +480,19 @@ export default function ReportsPage() {
         )}
 
         {activeTab === 'history' && (
-          <Card style={cardStyle}>
-            {reports.length > 0 ? (
-              <Table dataSource={reports} columns={reportColumns} rowKey="id" pagination={{ pageSize: 10 }} />
+      <Card style={cardStyle}>
+        {reports.length > 0 ? (
+          <Table
+            dataSource={reports}
+            columns={reportColumns}
+            rowKey="id"
+            pagination={{ pageSize: 10 }}
+            rowSelection={{
+              selectedRowKeys: selectedReportIds,
+              onChange: (keys) => setSelectedReportIds(keys as string[]),
+            }}
+          />
+
             ) : (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -554,35 +632,90 @@ export default function ReportsPage() {
         }
         destroyOnClose
       >
-        {previewReport && (
-          <div>
-            <div style={{ marginBottom: 16, color: token.colorTextTertiary, fontSize: 12 }}>
-              Generated: {new Date(previewReport.created_at).toLocaleString()}
-            </div>
-            {editingSections.length > 0 ? (
-              editingSections.map((section, idx) => (
-                <Card
-                  key={idx}
-                  size="small"
-                  style={{
-                    marginBottom: 16,
-                    borderRadius: 12,
-                    background: idx % 2 === 0 ? token.colorBgSpotlight : undefined,
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                  }}
-                >
-                  <Title level={5} style={{ color: token.colorPrimary, marginBottom: 8 }}>{section.title}</Title>
-                  <Paragraph style={{ color: token.colorText, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {section.content}
-                  </Paragraph>
-                </Card>
-              ))
-            ) : (
-              <Empty description="No report content available" />
-            )}
+      {previewReport && (
+        <div>
+          <div style={{ marginBottom: 16, color: token.colorTextTertiary, fontSize: 12 }}>
+            Generated: {new Date(previewReport.created_at).toLocaleString()}
           </div>
-        )}
-      </Modal>
-    </div>
+          {editingSections.length > 0 ? (
+            editingSections.map((section, idx) => (
+              <Card
+                key={idx}
+                size="small"
+                style={{
+                  marginBottom: 16,
+                  borderRadius: 12,
+                  background: idx % 2 === 0 ? token.colorBgSpotlight : undefined,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                }}
+              >
+                <Title level={5} style={{ color: token.colorPrimary, marginBottom: 8 }}>{section.title}</Title>
+                <Paragraph style={{ color: token.colorText, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                  {section.content}
+                </Paragraph>
+              </Card>
+            ))
+          ) : (
+            <Empty description="No report content available" />
+          )}
+        </div>
+      )}
+    </Modal>
+
+    <Modal
+      title={<Space><TeamOutlined style={{ color: token.colorPrimary }} /> Batch Report Generation</Space>}
+      open={batchModalOpen}
+      onCancel={() => { if (!batchRunning) setBatchModalOpen(false); }}
+      onOk={handleBatchGenerate}
+      okText={batchRunning ? 'Generating...' : 'Start Batch'}
+      confirmLoading={batchRunning}
+      width={640}
+      destroyOnClose
+    >
+      <Form form={batchForm} layout="vertical">
+        <Form.Item name="templateId" label="Select Template" rules={[{ required: true, message: 'Select a template' }]}>
+          <Select
+            placeholder="Choose a report template"
+            options={templates.map((t) => ({ value: t.id, label: t.name }))}
+          />
+        </Form.Item>
+        <Form.Item
+          name="cins"
+          label="Student CINs"
+          rules={[{ required: true, message: 'Enter at least one CIN' }]}
+          extra="Enter CINs separated by newlines, commas, or semicolons (max 50)"
+        >
+          <TextArea rows={6} placeholder="12345678&#10;87654321&#10;11223344" />
+        </Form.Item>
+      </Form>
+      {batchProgress && (
+        <Card size="small" style={{ marginTop: 16, borderRadius: 12 }}>
+          <div style={{ marginBottom: 12 }}>
+            <Progress
+              percent={Math.round(((batchProgress.succeeded + batchProgress.failed) / batchProgress.total) * 100)}
+              status={batchProgress.failed > 0 ? 'exception' : 'active'}
+            />
+          </div>
+          <Space style={{ marginBottom: 12 }}>
+            <Tag color="blue">Total: {batchProgress.total}</Tag>
+            <Tag color="green">Succeeded: {batchProgress.succeeded}</Tag>
+            <Tag color="red">Failed: {batchProgress.failed}</Tag>
+          </Space>
+          {batchProgress.results.filter((r) => r.status === 'failed').length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <Text type="danger" style={{ fontWeight: 600 }}>Failed CINs:</Text>
+              <ul style={{ margin: '4px 0 0 16px', fontSize: 12 }}>
+                {batchProgress.results.filter((r) => r.status === 'failed').map((r) => (
+                  <li key={r.cin}>
+                    <Text type="danger">{r.cin}</Text>: {r.error || 'Unknown error'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
+      )}
+    </Modal>
+  </div>
   );
 }

@@ -360,3 +360,39 @@ Generate the report as JSON.`;
 
   return report;
 }
+
+export interface BatchResult {
+  cin: string;
+  status: 'success' | 'failed';
+  reportId?: string;
+  error?: string;
+}
+
+export async function batchGenerateReports(data: {
+  templateId: string;
+  cins: string[];
+  filters?: Record<string, any>;
+}): Promise<{ results: BatchResult[]; total: number; succeeded: number; failed: number }> {
+  await getTemplateById(data.templateId);
+
+  const results: BatchResult[] = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const cin of data.cins) {
+    try {
+      const report = await generateReport({
+        templateId: data.templateId,
+        cin,
+        filters: data.filters,
+      });
+      results.push({ cin, status: 'success', reportId: report.id });
+      succeeded++;
+    } catch (err: any) {
+      results.push({ cin, status: 'failed', error: err.message || 'Unknown error' });
+      failed++;
+    }
+  }
+
+  return { results, total: data.cins.length, succeeded, failed };
+}
