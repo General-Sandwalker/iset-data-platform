@@ -104,3 +104,22 @@ export async function changePassword(userId: string, currentPassword: string, ne
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   await query('UPDATE users SET password_hash = $1, must_change_password = false WHERE id = $2', [passwordHash, userId]);
 }
+
+export async function updateProfile(userId: string, data: { firstName?: string; lastName?: string; email?: string }): Promise<AuthUser> {
+  const sets: string[] = [];
+  const values: any[] = [];
+  let i = 1;
+
+  if (data.firstName !== undefined) { sets.push(`first_name = $${i++}`); values.push(data.firstName); }
+  if (data.lastName !== undefined) { sets.push(`last_name = $${i++}`); values.push(data.lastName); }
+  if (data.email !== undefined) { sets.push(`email = $${i++}`); values.push(data.email); }
+
+  if (sets.length === 0) return getMe(userId);
+
+  values.push(userId);
+  const result = await query<any>(
+    `UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`,
+    values
+  );
+  return mapDbUser(result.rows[0]);
+}

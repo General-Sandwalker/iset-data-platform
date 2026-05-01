@@ -6,7 +6,7 @@ import { requireAuthenticated } from '../../middleware/rbac.js';
 import { authLimiter } from '../../middleware/rate-limit.js';
 import { sendSuccess, sendCreated } from '../../middleware/response.js';
 import { logActivity } from '../../middleware/activity-logger.js';
-import { login, getMe, resetUserPassword, changePassword } from './service.js';
+import { login, getMe, resetUserPassword, changePassword, updateProfile } from './service.js';
 
 const router = Router();
 
@@ -18,6 +18,12 @@ const loginSchema = z.object({
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8),
+});
+
+const updateProfileSchema = z.object({
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  email: z.string().email().optional(),
 });
 
 router.post(
@@ -61,6 +67,26 @@ router.post(
       await changePassword(req.user!.id, currentPassword, newPassword);
       await logActivity({ userId: req.user!.id, action: 'CHANGE_PASSWORD', ipAddress: req.ip });
       sendSuccess(res, { message: 'Password changed successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.patch(
+  '/me',
+  authenticate,
+  requireAuthenticated,
+  validate({ body: updateProfileSchema }),
+  async (req, res, next) => {
+    try {
+      const user = await updateProfile(req.user!.id, {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        email: req.body.email,
+      });
+      await logActivity({ userId: req.user!.id, action: 'UPDATE_PROFILE', ipAddress: req.ip });
+      sendSuccess(res, user);
     } catch (err) {
       next(err);
     }

@@ -19,7 +19,13 @@ import PartnershipsPage from './admin/partnerships';
 import SettingsPage from './admin/settings';
 import PublicDashboardPage from './public-pages/dashboard-viewer';
 import PublicSurveyPage from './public-pages/survey-form';
-import StudentDashboard from './portals/student';
+import { StudentLayout } from './app/layouts/StudentLayout';
+import StudentDashboard from './portals/student/dashboard';
+import StudentSurveysPage from './portals/student/surveys';
+import StudentSurveyTakePage from './portals/student/survey-take';
+import StudentMyDataPage from './portals/student/my-data';
+import StudentDashboardsPage from './portals/student/dashboards';
+import StudentProfilePage from './portals/student/profile';
 import TeacherDashboard from './portals/teacher';
 import AlumniDashboard from './portals/alumni';
 import EcoleDashboard from './portals/ecole';
@@ -110,12 +116,19 @@ function App() {
       <Route
         element={
           <AuthGuard>
-            <RoleGuard allowedRoles={['etudiant']} />
+            <RoleGuard allowedRoles={['etudiant']}>
+              <StudentLayout />
+            </RoleGuard>
           </AuthGuard>
         }
       >
         <Route path="/student" element={<Navigate to="/student/dashboard" />} />
         <Route path="/student/dashboard" element={<StudentDashboard />} />
+        <Route path="/student/surveys" element={<StudentSurveysPage />} />
+        <Route path="/student/surveys/:slug" element={<StudentSurveyTakePage />} />
+        <Route path="/student/my-data" element={<StudentMyDataPage />} />
+        <Route path="/student/dashboards" element={<StudentDashboardsPage />} />
+        <Route path="/student/profile" element={<StudentProfilePage />} />
       </Route>
 
       <Route
