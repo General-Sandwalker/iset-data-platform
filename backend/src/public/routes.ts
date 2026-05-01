@@ -68,3 +68,44 @@ publicLandingRoutes.get('/student-stats', authenticate, async (req, res, next) =
     });
   } catch (err) { next(err); }
 });
+
+publicLandingRoutes.get('/teacher-stats', authenticate, async (req, res, next) => {
+  try {
+    const [surveysRes, dashboardsRes, recordsRes] = await Promise.all([
+      query('SELECT COUNT(*)::int AS count FROM surveys WHERE status = $1', ['published']),
+      query('SELECT COUNT(*)::int AS count FROM dashboards WHERE is_published = true'),
+      query('SELECT COUNT(*)::int AS count FROM dynamic_tables WHERE is_user_linked = true'),
+    ]);
+
+    sendSuccess(res, {
+      availableSurveys: surveysRes.rows[0]?.count || 0,
+      publishedDashboards: dashboardsRes.rows[0]?.count || 0,
+      dataTables: recordsRes.rows[0]?.count || 0,
+    });
+  } catch (err) { next(err); }
+});
+
+publicLandingRoutes.get('/alumni-stats', authenticate, async (req, res, next) => {
+  try {
+    const userCin = req.user!.cin;
+    const [surveysRes, dashboardsRes] = await Promise.all([
+      query('SELECT COUNT(*)::int AS count FROM surveys WHERE status = $1', ['published']),
+      query('SELECT COUNT(*)::int AS count FROM dashboards WHERE is_published = true'),
+    ]);
+
+    let myRecordsCount = 0;
+    if (userCin) {
+      const tablesRes = await query('SELECT name FROM dynamic_tables WHERE is_user_linked = true');
+      for (const table of tablesRes.rows) {
+        const countRes = await query(`SELECT COUNT(*)::int AS count FROM ${table.name} WHERE cin = $1`, [userCin]);
+        myRecordsCount += countRes.rows[0]?.count || 0;
+      }
+    }
+
+    sendSuccess(res, {
+      availableSurveys: surveysRes.rows[0]?.count || 0,
+      publishedDashboards: dashboardsRes.rows[0]?.count || 0,
+      myRecords: myRecordsCount,
+    });
+  } catch (err) { next(err); }
+});

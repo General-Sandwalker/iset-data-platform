@@ -20,14 +20,24 @@ import SettingsPage from './admin/settings';
 import PublicDashboardPage from './public-pages/dashboard-viewer';
 import PublicSurveyPage from './public-pages/survey-form';
 import { StudentLayout } from './app/layouts/StudentLayout';
+import { TeacherLayout } from './app/layouts/TeacherLayout';
+import { AlumniLayout } from './app/layouts/AlumniLayout';
 import StudentDashboard from './portals/student/dashboard';
 import StudentSurveysPage from './portals/student/surveys';
 import StudentSurveyTakePage from './portals/student/survey-take';
 import StudentMyDataPage from './portals/student/my-data';
 import StudentDashboardsPage from './portals/student/dashboards';
 import StudentProfilePage from './portals/student/profile';
-import TeacherDashboard from './portals/teacher';
-import AlumniDashboard from './portals/alumni';
+import TeacherDashboard from './portals/teacher/dashboard';
+import TeacherDashboardsPage from './portals/teacher/dashboards';
+import TeacherSurveysPage from './portals/teacher/surveys';
+import TeacherSurveyTakePage from './portals/teacher/survey-take';
+import TeacherProfilePage from './portals/teacher/profile';
+import AlumniDashboard from './portals/alumni/dashboard';
+import AlumniProfilePage from './portals/alumni/profile';
+import AlumniSurveysPage from './portals/alumni/surveys';
+import AlumniSurveyTakePage from './portals/alumni/survey-take';
+import AlumniDashboardsPage from './portals/alumni/dashboards';
 import EcoleDashboard from './portals/ecole';
 import { AuthGuard } from './app/guards/AuthGuard';
 import { RoleGuard } from './app/guards/RoleGuard';
@@ -134,29 +144,35 @@ function App() {
       <Route
         element={
           <AuthGuard>
-            <RoleGuard allowedRoles={['enseignant']} />
+            <RoleGuard allowedRoles={['enseignant']}>
+              <TeacherLayout />
+            </RoleGuard>
           </AuthGuard>
         }
       >
-        <Route
-          path="/teacher"
-          element={<Navigate to="/teacher/dashboard" />}
-        />
+        <Route path="/teacher" element={<Navigate to="/teacher/dashboard" />} />
         <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+        <Route path="/teacher/dashboards" element={<TeacherDashboardsPage />} />
+        <Route path="/teacher/surveys" element={<TeacherSurveysPage />} />
+        <Route path="/teacher/surveys/:slug" element={<TeacherSurveyTakePage />} />
+        <Route path="/teacher/profile" element={<TeacherProfilePage />} />
       </Route>
 
       <Route
         element={
           <AuthGuard>
-            <RoleGuard allowedRoles={['alumni']} />
+            <RoleGuard allowedRoles={['alumni']}>
+              <AlumniLayout />
+            </RoleGuard>
           </AuthGuard>
         }
       >
-        <Route
-          path="/alumni"
-          element={<Navigate to="/alumni/dashboard" />}
-        />
+        <Route path="/alumni" element={<Navigate to="/alumni/dashboard" />} />
         <Route path="/alumni/dashboard" element={<AlumniDashboard />} />
+        <Route path="/alumni/profile" element={<AlumniProfilePage />} />
+        <Route path="/alumni/surveys" element={<AlumniSurveysPage />} />
+        <Route path="/alumni/surveys/:slug" element={<AlumniSurveyTakePage />} />
+        <Route path="/alumni/dashboards" element={<AlumniDashboardsPage />} />
       </Route>
 
       <Route
