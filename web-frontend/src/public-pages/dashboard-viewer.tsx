@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Card, Typography, Row, Col, Spin, message, theme, Empty, Tag } from 'antd';
+import { useParams, Link } from 'react-router-dom';
+import { Card, Typography, Row, Col, Spin, message, theme, Empty, Tag, Breadcrumb, Button } from 'antd';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { apiClient, type ApiResponse } from '../core/api/client';
 import type { Dashboard, DashboardChart, ChartDataResult, ChartType } from '../core/api/viz';
 
@@ -99,6 +100,15 @@ export default function PublicDashboardPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+      <Breadcrumb
+        style={{ marginBottom: 20 }}
+        items={[
+          { title: <Link to="/">Home</Link> },
+          { title: 'Dashboard' },
+          { title: dashboard.title },
+        ]}
+      />
+
       <div style={{ marginBottom: 24 }}>
         <Title level={2} style={{ marginBottom: 4 }}>{dashboard.title}</Title>
         {dashboard.description && <Text style={{ color: token.colorTextSecondary, fontSize: 16 }}>{dashboard.description}</Text>}
