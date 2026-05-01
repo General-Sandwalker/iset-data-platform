@@ -38,7 +38,9 @@ import AlumniProfilePage from './portals/alumni/profile';
 import AlumniSurveysPage from './portals/alumni/surveys';
 import AlumniSurveyTakePage from './portals/alumni/survey-take';
 import AlumniDashboardsPage from './portals/alumni/dashboards';
-import EcoleDashboard from './portals/ecole';
+import { ObservatoireLayout } from './app/layouts/ObservatoireLayout';
+import ObservatoireDashboard from './portals/observatoire/dashboard';
+import ObservatoireProfilePage from './portals/observatoire/profile';
 import { AuthGuard } from './app/guards/AuthGuard';
 import { RoleGuard } from './app/guards/RoleGuard';
 
@@ -178,11 +180,22 @@ function App() {
       <Route
         element={
           <AuthGuard>
-            <RoleGuard allowedRoles={['responsable_observatoire']} />
+            <RoleGuard allowedRoles={['responsable_observatoire']}>
+              <ObservatoireLayout />
+            </RoleGuard>
           </AuthGuard>
         }
       >
-        <Route path="/observatoire" element={<EcoleDashboard />} />
+        <Route path="/observatoire" element={<Navigate to="/observatoire/dashboard" />} />
+        <Route path="/observatoire/dashboard" element={<ObservatoireDashboard />} />
+        <Route path="/observatoire/analytics/academic" element={<AcademicAnalyticsPage />} />
+        <Route path="/observatoire/analytics/insertion" element={<InsertionAnalyticsPage />} />
+        <Route path="/observatoire/surveys" element={<SurveysPage />} />
+        <Route path="/observatoire/surveys/:id" element={<SurveyBuilderEditor />} />
+        <Route path="/observatoire/surveys/:id/stats" element={<SurveyStatsPage />} />
+        <Route path="/observatoire/charts" element={<ChartsPage />} />
+        <Route path="/observatoire/reports" element={<ReportsPage />} />
+        <Route path="/observatoire/profile" element={<ObservatoireProfilePage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" />} />

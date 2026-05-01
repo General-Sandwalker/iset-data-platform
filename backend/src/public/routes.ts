@@ -109,3 +109,25 @@ publicLandingRoutes.get('/alumni-stats', authenticate, async (req, res, next) =>
     });
   } catch (err) { next(err); }
 });
+
+publicLandingRoutes.get('/observatoire-stats', authenticate, async (req, res, next) => {
+  try {
+    const [studentsRes, alumniRes, surveysRes, dashboardsRes, tablesRes, reportsRes] = await Promise.all([
+      query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'etudiant'"),
+      query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'alumni'"),
+      query('SELECT COUNT(*)::int AS count FROM surveys'),
+      query('SELECT COUNT(*)::int AS count FROM dashboards WHERE is_published = true'),
+      query('SELECT COUNT(*)::int AS count FROM dynamic_tables WHERE is_user_linked = true'),
+      query('SELECT COUNT(*)::int AS count FROM report_templates'),
+    ]);
+
+    sendSuccess(res, {
+      students: studentsRes.rows[0]?.count || 0,
+      alumni: alumniRes.rows[0]?.count || 0,
+      surveys: surveysRes.rows[0]?.count || 0,
+      dashboards: dashboardsRes.rows[0]?.count || 0,
+      dataTables: tablesRes.rows[0]?.count || 0,
+      reports: reportsRes.rows[0]?.count || 0,
+    });
+  } catch (err) { next(err); }
+});
