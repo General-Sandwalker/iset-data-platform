@@ -19,6 +19,11 @@ import {
   generateReport,
   reportStatuses,
 } from './service.js';
+import {
+  exportReportPdf,
+  exportReportExcel,
+  getReportHtmlPreview,
+} from './export-service.js';
 
 const router = Router();
 
@@ -201,6 +206,42 @@ router.post('/reports/generate', requireManager, aiLimiter, validate({ body: gen
       metadata: { templateId: req.body.templateId, cin: req.body.cin },
     });
     sendCreated(res, report);
+  } catch (err) { next(err); }
+});
+
+router.get('/reports/:id/preview-html', requireManager, validate({ params: uuidParam }), async (req, res, next) => {
+  try {
+    const { html } = await getReportHtmlPreview(req.params.id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (err) { next(err); }
+});
+
+router.post('/reports/:id/export/pdf', requireManager, validate({ params: uuidParam }), async (req, res, next) => {
+  try {
+    const { fileName } = await exportReportPdf(req.params.id);
+    await logActivity({
+      userId: req.user!.id,
+      action: 'EXPORT_REPORT_PDF',
+      entityType: 'generated_report',
+      entityId: req.params.id,
+      ipAddress: req.ip,
+    });
+    sendSuccess(res, { downloadUrl: `/exports/${fileName}`, fileName });
+  } catch (err) { next(err); }
+});
+
+router.post('/reports/:id/export/excel', requireManager, validate({ params: uuidParam }), async (req, res, next) => {
+  try {
+    const { fileName } = await exportReportExcel(req.params.id);
+    await logActivity({
+      userId: req.user!.id,
+      action: 'EXPORT_REPORT_EXCEL',
+      entityType: 'generated_report',
+      entityId: req.params.id,
+      ipAddress: req.ip,
+    });
+    sendSuccess(res, { downloadUrl: `/exports/${fileName}`, fileName });
   } catch (err) { next(err); }
 });
 

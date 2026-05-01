@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import { errorHandler } from './middleware/error-handler.js';
 import { config } from './config/env.js';
 import { runMigrations } from './core/migration-runner.js';
@@ -58,8 +59,9 @@ apiRouter.use('/surveys', surveyRoutes);
 
 app.use('/api/v1', apiRouter);
 
-app.use('/public', publicSurveyRoutes);
-app.use('/public', publicVizRoutes);
+  app.use('/public', publicSurveyRoutes);
+  app.use('/public', publicVizRoutes);
+  app.use('/exports', express.static(path.join(process.cwd(), 'uploads', 'exports')));
 
 app.use(errorHandler);
 
