@@ -18,6 +18,7 @@ import aiRoutes from './ai-services/routes.js';
 import surveyRoutes from './survey-engine/routes.js';
 import { publicSurveyRoutes } from './survey-engine/public-routes.js';
 import { vizRoutes, publicVizRoutes } from './viz-engine/routes.js';
+import { publicLandingRoutes } from './public/routes.js';
 import analyticsRoutes from './analytics/routes.js';
 import reportRoutes from './report-engine/routes.js';
 import { sendSuccess } from './middleware/response.js';
@@ -61,6 +62,7 @@ app.use('/api/v1', apiRouter);
 
   app.use('/public', publicSurveyRoutes);
   app.use('/public', publicVizRoutes);
+  app.use('/public', publicLandingRoutes);
   app.use('/exports', express.static(path.join(process.cwd(), 'uploads', 'exports')));
 
 app.use(errorHandler);
