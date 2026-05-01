@@ -5,7 +5,7 @@
 **Total Phases:** 11
 **Completed Phases:** 8
 **Total Issues:** 62
-**Completed Issues:** 35
+**Completed Issues:** 36
 **In Progress:** Phase 9
 
 ---
@@ -110,7 +110,7 @@
 
 | # | Issue | Status | Closed |
 |---|-------|--------|--------|
-| 41 | Build landing page | 🔄 Pending | — |
+| 41 | Build landing page | ✅ Done | 2026-05-01 |
 | 42 | Build student portal | 🔄 Pending | — |
 | 43 | Build teacher and alumni portals | 🔄 Pending | — |
 | 44 | Build responsable observatoire portal | 🔄 Pending | — |
