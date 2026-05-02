@@ -3,7 +3,7 @@ import { config } from '../config/env.js';
 
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: config.NODE_ENV === 'test' ? Infinity : 100,
   message: {
     success: false,
     error: {
@@ -17,7 +17,7 @@ export const globalLimiter = rateLimit({
 
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: config.NODE_ENV === 'test' ? Infinity : 10,
   message: {
     success: false,
     error: {
@@ -31,7 +31,7 @@ export const authLimiter = rateLimit({
 
 export const aiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 50,
+  max: config.NODE_ENV === 'test' ? Infinity : 50,
   message: {
     success: false,
     error: {
