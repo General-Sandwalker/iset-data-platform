@@ -122,7 +122,14 @@ function App() {
           }
         />
         <Route path="/admin/partnerships" element={<PartnershipsPage />} />
-        <Route path="/admin/settings" element={<SettingsPage />} />
+        <Route
+          path="/admin/settings"
+          element={
+            <RoleGuard allowedRoles={['super_admin', 'admin']}>
+              <SettingsPage />
+            </RoleGuard>
+          }
+        />
       </Route>
 
       <Route
