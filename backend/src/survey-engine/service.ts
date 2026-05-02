@@ -1,6 +1,6 @@
 import { query, getClient } from '../config/database.js';
 import { HttpError } from '../middleware/auth.js';
-import { addField, getTableById, listFields, listData, insertData, type FieldType } from '../schema-engine/service.js';
+import { addField, getTableById, listFields, listData, insertData, assertValidIdentifier, type FieldType } from '../schema-engine/service.js';
 
 export const questionTypes = [
   'multiple_choice',
@@ -553,6 +553,7 @@ export async function submitSurveyResponse(
   }
 
   const targetTable = await getTableById(survey.target_table_id);
+  assertValidIdentifier(targetTable.name);
   const fields = await listFields(survey.target_table_id);
   const questions = await listQuestions(survey.id);
 
@@ -662,6 +663,7 @@ export async function getSurveyStats(id: string): Promise<any> {
   }
 
   const targetTable = await getTableById(survey.target_table_id);
+  assertValidIdentifier(targetTable.name);
   const questions = await listQuestions(id);
   const fields = await listFields(survey.target_table_id);
   const fieldMap = new Map(fields.map(f => [f.id, f]));
@@ -682,10 +684,11 @@ export async function getSurveyStats(id: string): Promise<any> {
   for (const question of questions) {
     if (!question.target_field_id) continue;
 
-    const field = fieldMap.get(question.target_field_id);
-    if (!field) continue;
+  const field = fieldMap.get(question.target_field_id);
+  if (!field) continue;
+  assertValidIdentifier(field.name);
 
-    const questionStat: any = {
+  const questionStat: any = {
       questionId: question.id,
       label: question.label,
       type: question.type,

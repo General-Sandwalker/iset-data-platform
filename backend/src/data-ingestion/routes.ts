@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/rbac.js';
 import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
+import { config } from '../config/env.js';
 import { fieldTypes } from '../schema-engine/service.js';
 import {
   createImport,
@@ -51,23 +52,23 @@ const fileFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer
   const ext = path.extname(file.originalname).toLowerCase();
   const allowedExts = ['.csv', '.xlsx', '.xls', '.json'];
 
-  if (allowedExts.includes(ext)) {
-    const allowedMimes = [
-      'text/csv',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/json',
-    ];
-
-    if (file.mimetype === 'application/octet-stream') {
-      cb(null, true);
-    } else if (allowedMimes.includes(file.mimetype) || ext === '.csv' || ext === '.json') {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type'));
-    }
-  } else {
+  if (!allowedExts.includes(ext)) {
     cb(new Error('Invalid file extension'));
+    return;
+  }
+
+  const allowedMimes = [
+    'text/csv',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/json',
+    'application/octet-stream',
+  ];
+
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file MIME type'));
   }
 };
 
@@ -75,7 +76,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024,
+    fileSize: config.UPLOAD_MAX_SIZE,
   },
 });
 
@@ -481,7 +482,7 @@ router.post(
 
 const createTableAndImportSchema = z.object({
   fileId: z.string().uuid(),
-  tableName: z.string().min(1).regex(/^[a-zA-Z][a-z0-9_]*$/),
+  tableName: z.string().min(1).regex(/^[a-z0-9_]+$/),
   displayName: z.string().min(1),
   description: z.string().optional(),
   isUserLinked: z.boolean().default(false),

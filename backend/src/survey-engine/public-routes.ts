@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import jwt from 'jsonwebtoken';
 import { validate } from '../middleware/validation.js';
 import { sendSuccess, sendCreated } from '../middleware/response.js';
+import { config } from '../config/env.js';
+import { publicSubmissionLimiter } from '../middleware/rate-limit.js';
 import { getSurveyBySlug, submitSurveyResponse } from './service.js';
 
 export const publicSurveyRoutes = Router();
@@ -14,13 +17,24 @@ const submitSchema = z.object({
   responses: z.record(z.any()),
 });
 
+function extractCinFromToken(req: { headers: { authorization?: string } }): string | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  try {
+    const payload = jwt.verify(authHeader.substring(7), config.JWT_SECRET, { algorithms: ['HS256'] }) as any;
+    return payload.cin || null;
+  } catch {
+    return null;
+  }
+}
+
 publicSurveyRoutes.get('/surveys/:slug', validate({ params: slugParam }), async (req, res, next) => {
   try {
     const survey = await getSurveyBySlug(req.params.slug);
 
     if (survey.access_type === 'authenticated') {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
+      const cin = extractCinFromToken(req as any);
+      if (!cin && !req.headers.authorization?.startsWith('Bearer ')) {
         return res.status(401).json({
           success: false,
           error: { code: 'AUTH_REQUIRED', message: 'This survey requires authentication' },
@@ -48,31 +62,21 @@ publicSurveyRoutes.get('/surveys/:slug', validate({ params: slugParam }), async 
   } catch (err) { next(err); }
 });
 
-publicSurveyRoutes.post('/surveys/:slug/submit', validate({ params: slugParam, body: submitSchema }), async (req, res, next) => {
+publicSurveyRoutes.post('/surveys/:slug/submit', publicSubmissionLimiter, validate({ params: slugParam, body: submitSchema }), async (req, res, next) => {
   try {
     const survey = await getSurveyBySlug(req.params.slug);
 
     let userCin: string | undefined;
 
     if (survey.access_type === 'authenticated') {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
-        return res.status(401).json({
-          success: false,
-          error: { code: 'AUTH_REQUIRED', message: 'This survey requires authentication' },
-        });
-      }
-
-      try {
-        const jwt = await import('jsonwebtoken');
-        const payload = jwt.verify(authHeader.substring(7), process.env.JWT_SECRET || 'change-me-in-production') as any;
-        userCin = payload.cin;
-      } catch {
+      const cin = extractCinFromToken(req as any);
+      if (!cin) {
         return res.status(401).json({
           success: false,
           error: { code: 'INVALID_TOKEN', message: 'Invalid or expired authentication token' },
         });
       }
+      userCin = cin;
     }
 
     const record = await submitSurveyResponse(req.params.slug, req.body.responses, userCin);

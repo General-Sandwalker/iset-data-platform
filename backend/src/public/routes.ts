@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../config/database.js';
 import { sendSuccess } from '../middleware/response.js';
 import { authenticate } from '../middleware/auth.js';
+import { assertValidIdentifier } from '../schema-engine/service.js';
 
 export const publicLandingRoutes = Router();
 
@@ -56,6 +57,7 @@ publicLandingRoutes.get('/student-stats', authenticate, async (req, res, next) =
     if (userCin) {
       const tablesRes = await query('SELECT name FROM dynamic_tables WHERE is_user_linked = true');
       for (const table of tablesRes.rows) {
+        assertValidIdentifier(table.name);
         const countRes = await query(`SELECT COUNT(*)::int AS count FROM ${table.name} WHERE cin = $1`, [userCin]);
         myRecordsCount += countRes.rows[0]?.count || 0;
       }
@@ -97,6 +99,7 @@ publicLandingRoutes.get('/alumni-stats', authenticate, async (req, res, next) =>
     if (userCin) {
       const tablesRes = await query('SELECT name FROM dynamic_tables WHERE is_user_linked = true');
       for (const table of tablesRes.rows) {
+        assertValidIdentifier(table.name);
         const countRes = await query(`SELECT COUNT(*)::int AS count FROM ${table.name} WHERE cin = $1`, [userCin]);
         myRecordsCount += countRes.rows[0]?.count || 0;
       }

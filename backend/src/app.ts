@@ -2,9 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import fs from 'fs';
 import { errorHandler } from './middleware/error-handler.js';
 import { config } from './config/env.js';
 import { globalLimiter, aiLimiter } from './middleware/rate-limit.js';
+import { authenticate } from './middleware/auth.js';
+import { sendSuccess } from './middleware/response.js';
 import authRoutes from './core/auth/routes.js';
 import authAdminRoutes from './core/auth/admin-routes.js';
 import userRoutes from './core/users/routes.js';
@@ -20,13 +23,33 @@ import analyticsRoutes from './analytics/routes.js';
 import reportRoutes from './report-engine/routes.js';
 import partnershipsRoutes from './partnerships/routes.js';
 import systemAdminRoutes from './system-admin/routes.js';
-import { sendSuccess } from './middleware/response.js';
+import { HttpError } from './middleware/auth.js';
 
 export function createApp() {
   const app = express();
 
+  app.set('trust proxy', 1);
+
   app.use(helmet());
-  app.use(cors({ origin: config.FRONTEND_URL }));
+  app.use(helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'", config.FRONTEND_URL],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  }));
+  app.use(cors({
+    origin: config.FRONTEND_URL,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    maxAge: 86400,
+  }));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
@@ -61,7 +84,18 @@ export function createApp() {
   app.use('/public', publicSurveyRoutes);
   app.use('/public', publicVizRoutes);
   app.use('/public', publicLandingRoutes);
-  app.use('/exports', express.static(path.join(process.cwd(), 'uploads', 'exports')));
+
+  app.get('/exports/:fileName', authenticate, (req, res, next) => {
+    const fileName = req.params.fileName;
+    if (!/^[a-zA-Z0-9_.\-]+$/.test(fileName)) {
+      throw new HttpError(400, 'INVALID_FILENAME', 'Invalid filename');
+    }
+    const filePath = path.join(process.cwd(), 'uploads', 'exports', fileName);
+    if (!fs.existsSync(filePath)) {
+      throw new HttpError(404, 'FILE_NOT_FOUND', 'Export file not found');
+    }
+    res.sendFile(filePath);
+  });
 
   app.use(errorHandler);
 

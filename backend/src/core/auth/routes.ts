@@ -60,6 +60,7 @@ router.post(
   '/change-password',
   authenticate,
   requireAuthenticated,
+  authLimiter,
   validate({ body: changePasswordSchema }),
   async (req, res, next) => {
     try {

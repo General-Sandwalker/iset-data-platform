@@ -1,5 +1,6 @@
 import { query } from '../config/database.js';
 import { HttpError } from '../middleware/auth.js';
+import { assertValidIdentifier } from '../schema-engine/service.js';
 
 export interface SystemSetting {
   key: string;
@@ -31,7 +32,9 @@ async function getDynamicTableName(tableId: string): Promise<string> {
 async function resolveTableName(settingKey: string): Promise<string | null> {
   const tableId = await getSetting(settingKey);
   if (!tableId) return null;
-  return getDynamicTableName(tableId);
+  const name = await getDynamicTableName(tableId);
+  assertValidIdentifier(name);
+  return name;
 }
 
 interface AcademicFilters {

@@ -1,9 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../../config/database.js';
 import { HttpError } from '../../middleware/auth.js';
+import { config } from '../../config/env.js';
 import type { Request } from 'express';
-
-const BCRYPT_ROUNDS = 12;
 
 export interface User {
   id: string;
@@ -58,7 +57,7 @@ export async function createUser(input: CreateUserInput, createdBy: string): Pro
   }
 
   const tempPassword = input.password || generateTempPassword();
-  const passwordHash = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
+  const passwordHash = await bcrypt.hash(tempPassword, config.BCRYPT_ROUNDS);
 
   const result = await query<User>(
     `INSERT INTO users (cin, email, password_hash, role, first_name, last_name, phone, is_active, must_change_password, created_by)

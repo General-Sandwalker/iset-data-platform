@@ -30,7 +30,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
   const token = authHeader.substring(7);
 
   try {
-    const payload = jwt.verify(token, config.JWT_SECRET) as JwtPayload;
+    const payload = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload;
     req.user = payload;
     next();
   } catch (err) {

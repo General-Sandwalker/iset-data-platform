@@ -135,8 +135,9 @@ router.delete('/charts/:id', requireAdmin, validate({ params: uuidParam }), asyn
 
 router.post('/charts/:id/execute', validate({ params: uuidParam }), async (req, res, next) => {
   try {
-    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit) : 500;
+    const limit = typeof req.query.limit === 'string' ? Math.min(parseInt(req.query.limit) || 500, 10000) : 500;
     const result = await executeChartQuery(req.params.id, limit);
+    await logActivity({ userId: req.user!.id, action: 'EXECUTE_CHART', entityType: 'chart', entityId: req.params.id, ipAddress: req.ip });
     sendSuccess(res, result);
   } catch (err) { next(err); }
 });
@@ -144,6 +145,7 @@ router.post('/charts/:id/execute', validate({ params: uuidParam }), async (req, 
 router.post('/charts/execute-raw', requireAdmin, validate({ body: executeRawSchema }), async (req, res, next) => {
   try {
     const result = await executeRawQuery(req.body.tableId, req.body.sqlQuery, req.body.limit);
+    await logActivity({ userId: req.user!.id, action: 'EXECUTE_RAW_SQL', entityType: 'chart', entityId: req.body.tableId, ipAddress: req.ip });
     sendSuccess(res, result);
   } catch (err) { next(err); }
 });

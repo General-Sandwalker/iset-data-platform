@@ -7,8 +7,6 @@ interface User {
   role: string;
 }
 
-const BCRYPT_ROUNDS = 12;
-
 export async function seedSuperAdmin(): Promise<void> {
   if (!config.SUPER_ADMIN_USERNAME || !config.SUPER_ADMIN_PASSWORD) {
     console.error('FATAL: SUPER_ADMIN_USERNAME and SUPER_ADMIN_PASSWORD must be set in environment');
@@ -24,7 +22,7 @@ export async function seedSuperAdmin(): Promise<void> {
     return;
   }
 
-  const passwordHash = await bcrypt.hash(config.SUPER_ADMIN_PASSWORD, BCRYPT_ROUNDS);
+  const passwordHash = await bcrypt.hash(config.SUPER_ADMIN_PASSWORD, config.BCRYPT_ROUNDS);
 
   await query(
     `INSERT INTO users (cin, email, password_hash, role, first_name, last_name, is_active, must_change_password)

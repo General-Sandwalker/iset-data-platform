@@ -14,6 +14,18 @@ function sanitizeIdentifier(name: string): string {
   return name;
 }
 
+export function assertValidIdentifier(name: string): void {
+  if (!identifierRegex.test(name)) {
+    throw new HttpError(400, 'INVALID_IDENTIFIER', `Invalid identifier: ${name}`);
+  }
+}
+
+function assertDtPrefix(name: string): void {
+  if (!name.startsWith('dt_')) {
+    throw new HttpError(400, 'INVALID_TABLE_NAME', 'Dynamic table name must start with dt_ prefix');
+  }
+}
+
 function sqlTypeForFieldType(type: FieldType): string {
   switch (type) {
     case 'text':
@@ -125,6 +137,7 @@ export async function getTableById(id: string): Promise<DynamicTable> {
 
 export async function updateTable(id: string, data: { displayName?: string; description?: string; isUserLinked?: boolean }): Promise<DynamicTable> {
   const table = await getTableById(id);
+  assertValidIdentifier(table.name);
   const updates: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -170,6 +183,8 @@ export async function updateTable(id: string, data: { displayName?: string; desc
 
 export async function deleteTable(id: string): Promise<void> {
   const table = await getTableById(id);
+  assertValidIdentifier(table.name);
+  assertDtPrefix(table.name);
   const client = await getClient();
   try {
     await client.query('BEGIN');
@@ -195,6 +210,7 @@ export async function addField(data: {
 }): Promise<DynamicField> {
   const table = await getTableById(data.tableId);
   const sanitizedName = sanitizeIdentifier(data.name.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+  assertValidIdentifier(table.name);
   const columnType = sqlTypeForFieldType(data.fieldType);
   const defaultClause = data.isRequired ? '' : ' DEFAULT NULL';
 
@@ -260,7 +276,9 @@ export async function updateField(id: string, data: {
 
 export async function deleteField(id: string): Promise<void> {
   const field = await getFieldById(id);
+  assertValidIdentifier(field.name);
   const table = await getTableById(field.table_id);
+  assertValidIdentifier(table.name);
   const client = await getClient();
   try {
     await client.query('BEGIN');
@@ -331,16 +349,20 @@ export async function createRelationship(data: {
   relationshipType: RelationshipType;
 }): Promise<DynamicRelationship> {
   const sourceTable = await getTableById(data.sourceTableId);
+  assertValidIdentifier(sourceTable.name);
   const sourceField = await getFieldById(data.sourceFieldId);
+  assertValidIdentifier(sourceField.name);
   if (sourceField.table_id !== data.sourceTableId) {
     throw new HttpError(400, 'FIELD_MISMATCH', 'Source field does not belong to source table');
   }
 
   const targetTable = await getTableById(data.targetTableId);
+  assertValidIdentifier(targetTable.name);
 
   let targetField: DynamicField | null = null;
   if (data.targetFieldId) {
     targetField = await getFieldById(data.targetFieldId);
+    assertValidIdentifier(targetField.name);
     if (targetField.table_id !== data.targetTableId) {
       throw new HttpError(400, 'FIELD_MISMATCH', 'Target field does not belong to target table');
     }
@@ -490,7 +512,9 @@ export async function updateRelationship(id: string, data: {
 export async function deleteRelationship(id: string): Promise<void> {
   const relationship = await getRelationshipById(id);
   const sourceTable = await getTableById(relationship.source_table_id);
+  assertValidIdentifier(sourceTable.name);
   const sourceField = await getFieldById(relationship.source_field_id);
+  assertValidIdentifier(sourceField.name);
 
   const client = await getClient();
   try {
@@ -605,7 +629,9 @@ export async function listData(
   params: DataListParams = {}
 ): Promise<DataListResult> {
   const table = await getTableById(tableId);
+  assertValidIdentifier(table.name);
   const fields = await listFields(tableId);
+  for (const f of fields) { assertValidIdentifier(f.name); }
   const fieldMap = new Map(fields.map(f => [f.name, f]));
 
   const page = Math.max(1, params.page || 1);
@@ -656,7 +682,7 @@ export async function listData(
 
   const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-  const sortBy = params.sortBy && fieldMap.has(params.sortBy) ? params.sortBy : 'created_at';
+  const sortBy = (params.sortBy && fieldMap.has(params.sortBy) && identifierRegex.test(params.sortBy)) ? params.sortBy : 'created_at';
   const sortOrder = params.sortOrder === 'asc' ? 'ASC' : 'DESC';
   const orderSQL = `${table.name}.${sortBy} ${sortOrder} NULLS LAST`;
 
@@ -680,7 +706,9 @@ export async function insertData(
   userId?: string
 ): Promise<any> {
   const table = await getTableById(tableId);
+  assertValidIdentifier(table.name);
   const fields = await listFields(tableId);
+  for (const f of fields) { assertValidIdentifier(f.name); }
   const fieldMap = new Map(fields.map(f => [f.name, f]));
 
   for (const [name, field] of fieldMap) {
@@ -737,7 +765,9 @@ export async function updateData(
   input: Record<string, any>
 ): Promise<any> {
   const table = await getTableById(tableId);
+  assertValidIdentifier(table.name);
   const fields = await listFields(tableId);
+  for (const f of fields) { assertValidIdentifier(f.name); }
   const fieldMap = new Map(fields.map(f => [f.name, f]));
 
   const existing = await query(`SELECT id FROM ${table.name} WHERE id = $1`, [recordId]);
@@ -787,6 +817,7 @@ export async function updateData(
 
 export async function deleteData(tableId: string, recordId: string): Promise<void> {
   const table = await getTableById(tableId);
+  assertValidIdentifier(table.name);
 
   const existing = await query(`SELECT id FROM ${table.name} WHERE id = $1`, [recordId]);
   if (existing.rows.length === 0) {

@@ -144,7 +144,7 @@ describe('Data Import Endpoints', () => {
         .set(ADMIN_AUTH)
         .send({
           fileId: UUID_V4,
-          tableName: '123invalid',
+          tableName: 'Invalid-Table',
           displayName: 'Bad Table',
           mappings: [],
         });

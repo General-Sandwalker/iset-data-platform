@@ -11,7 +11,7 @@ vi.mock('../src/middleware/activity-logger.js', () => ({
 
 const mockTable = {
   id: UUID_V4,
-  name: 'students',
+  name: 'dt_students',
   display_name: 'Students',
   description: 'Student data',
   is_user_linked: false,

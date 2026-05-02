@@ -1,6 +1,30 @@
 import { query, getClient } from '../config/database.js';
 import { HttpError } from '../middleware/auth.js';
-import { getTableById, listFields } from '../schema-engine/service.js';
+import { getTableById, listFields, assertValidIdentifier } from '../schema-engine/service.js';
+import { Parser } from 'node-sql-parser';
+
+const MAX_CHART_LIMIT = 10000;
+
+const parser = new Parser();
+
+function astValidateSql(sql: string): void {
+  let ast;
+  try {
+    ast = parser.astify(sql);
+  } catch {
+    throw new HttpError(400, 'INVALID_SQL', 'Query could not be parsed. Check syntax.');
+  }
+
+  const statements = Array.isArray(ast) ? ast : [ast];
+  if (statements.length !== 1) {
+    throw new HttpError(400, 'INVALID_SQL', 'Only single statements are allowed');
+  }
+
+  const stmt = statements[0];
+  if (stmt.type !== 'select') {
+    throw new HttpError(400, 'INVALID_SQL', 'Only SELECT queries are allowed');
+  }
+}
 
 export const chartTypes = ['bar', 'line', 'pie', 'donut', 'area', 'scatter', 'table', 'metric', 'horizontal_bar', 'radar'] as const;
 export type ChartType = typeof chartTypes[number];
@@ -149,50 +173,68 @@ export async function deleteChart(id: string): Promise<void> {
 
 async function validateSqlQuery(tableId: string, sqlQuery: string): Promise<void> {
   const table = await getTableById(tableId);
+  assertValidIdentifier(table.name);
 
-  const lowerSQL = sqlQuery.toLowerCase().trim();
-  if (!lowerSQL.startsWith('select')) {
-    throw new HttpError(400, 'INVALID_SQL', 'Only SELECT queries are allowed');
-  }
-  if (lowerSQL.includes(';') && lowerSQL.indexOf(';') < lowerSQL.length - 1) {
-    throw new HttpError(400, 'INVALID_SQL', 'Only single statements are allowed');
-  }
-  const forbiddenPatterns = ['insert ', 'update ', 'delete ', 'drop ', 'alter ', 'create ', 'truncate ', 'grant ', 'revoke '];
-  for (const pattern of forbiddenPatterns) {
-    if (lowerSQL.includes(pattern)) {
-      throw new HttpError(400, 'INVALID_SQL', `Forbidden SQL operation: ${pattern.trim()}`);
-    }
-  }
+  astValidateSql(sqlQuery);
 
-  if (!lowerSQL.includes(table.name.toLowerCase())) {
+  if (!sqlQuery.toLowerCase().includes(table.name.toLowerCase())) {
     throw new HttpError(400, 'INVALID_SQL', `Query must reference the table: ${table.name}`);
   }
 }
 
 export async function executeChartQuery(chartId: string, limit: number = 500): Promise<{ rows: Record<string, unknown>[]; totalCount: number }> {
   const chart = await getChartById(chartId);
+  assertValidIdentifier(chart.table_name);
 
-  const countSQL = `SELECT COUNT(*) as cnt FROM (${chart.sql_query}) as subq`;
-  const countResult = await query<{ cnt: string }>(countSQL);
-  const totalCount = parseInt(countResult.rows[0].cnt);
+  astValidateSql(chart.sql_query);
 
-  const limitedSQL = limit > 0 ? `${chart.sql_query} LIMIT ${limit}` : chart.sql_query;
-  const result = await query(limitedSQL);
+  const safeLimit = Math.min(Math.max(1, limit), MAX_CHART_LIMIT);
+  const client = await getClient();
+  try {
+    await client.query('BEGIN READ ONLY');
+    await client.query('SET LOCAL statement_timeout = 10000');
 
-  return { rows: result.rows, totalCount };
+    const countSQL = `SELECT COUNT(*) as cnt FROM (${chart.sql_query}) as subq`;
+    const countResult = await client.query<{ cnt: string }>(countSQL);
+    const totalCount = parseInt(countResult.rows[0].cnt);
+
+    const limitedSQL = `${chart.sql_query} LIMIT $1`;
+    const result = await client.query(limitedSQL, [safeLimit]);
+
+    await client.query('COMMIT');
+    return { rows: result.rows, totalCount };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function executeRawQuery(tableId: string, sqlQuery: string, limit: number = 100): Promise<{ rows: Record<string, unknown>[]; totalCount: number }> {
   await validateSqlQuery(tableId, sqlQuery);
 
-  const countSQL = `SELECT COUNT(*) as cnt FROM (${sqlQuery}) as subq`;
-  const countResult = await query<{ cnt: string }>(countSQL);
-  const totalCount = parseInt(countResult.rows[0].cnt);
+  const safeLimit = Math.min(Math.max(1, limit), 1000);
+  const client = await getClient();
+  try {
+    await client.query('BEGIN READ ONLY');
+    await client.query('SET LOCAL statement_timeout = 10000');
 
-  const limitedSQL = `${sqlQuery} LIMIT ${limit}`;
-  const result = await query(limitedSQL);
+    const countSQL = `SELECT COUNT(*) as cnt FROM (${sqlQuery}) as subq`;
+    const countResult = await client.query<{ cnt: string }>(countSQL);
+    const totalCount = parseInt(countResult.rows[0].cnt);
 
-  return { rows: result.rows, totalCount };
+    const limitedSQL = `${sqlQuery} LIMIT $1`;
+    const result = await client.query(limitedSQL, [safeLimit]);
+
+    await client.query('COMMIT');
+    return { rows: result.rows, totalCount };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export interface Dashboard {

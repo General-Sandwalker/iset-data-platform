@@ -1,6 +1,6 @@
 import { query, getClient } from '../config/database.js';
 import { HttpError } from '../middleware/auth.js';
-import { getTableById, listTables, listFields } from '../schema-engine/service.js';
+import { getTableById, listTables, listFields, assertValidIdentifier } from '../schema-engine/service.js';
 import { groqChat } from '../config/groq.js';
 
 export const reportStatuses = ['generated', 'exported', 'failed'] as const;
@@ -268,14 +268,15 @@ async function fetchStudentContext(cin: string): Promise<Record<string, any>> {
       const fields = await listFields(table.id);
       const hasCin = fields.some((f) => f.name === 'cin');
       if (!hasCin) continue;
+      assertValidIdentifier(table.name);
 
       const result = await query(
-        `SELECT * FROM ${table.name} WHERE cin = $1 ORDER BY created_at DESC LIMIT 50`,
-        [cin]
-      );
+      `SELECT * FROM ${table.name} WHERE cin = $1 ORDER BY created_at DESC LIMIT 50`,
+      [cin]
+    );
 
-      if (result.rows.length > 0) {
-        context[table.display_name || table.name] = result.rows;
+    if (result.rows.length > 0) {
+      context[table.display_name || table.name] = result.rows;
       }
     } catch {
       continue;
