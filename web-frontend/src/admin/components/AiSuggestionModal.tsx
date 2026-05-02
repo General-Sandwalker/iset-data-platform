@@ -156,7 +156,7 @@ export default function AiSuggestionModal({ open, fileId, onCancel, onApply }: A
           />
 
           <div style={{ marginBottom: 16 }}>
-            <Space direction="vertical" style={{ width: '100%' }} size={8}>
+            <Space orientation="vertical" style={{ width: '100%' }} size={8}>
               <div>
                 <Text strong>Table Name: </Text>
                 <Input

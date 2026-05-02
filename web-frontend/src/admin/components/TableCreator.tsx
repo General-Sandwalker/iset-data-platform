@@ -278,9 +278,9 @@ export default function TableCreator({ onSuccess, onCancel }: TableCreatorProps)
   );
 
   const steps = [
-    { title: 'Basic Info', description: 'Name & Description' },
-    { title: 'Fields', description: 'Define columns' },
-    { title: 'Review', description: 'Confirm & Create' },
+  { title: 'Basic Info', content: 'Name & Description' },
+  { title: 'Fields', content: 'Define columns' },
+  { title: 'Review', content: 'Confirm & Create' },
   ];
 
   return (

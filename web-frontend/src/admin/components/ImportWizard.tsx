@@ -329,19 +329,19 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
           Browse Files
         </Button>
       </Dragger>
-      <Alert
-        message="Supported Formats"
-        description="CSV (.csv), Excel (.xlsx, .xls), JSON (.json) - Maximum file size: 50MB"
-        type="info"
-        showIcon
-        style={{
-          marginTop: 24,
-          borderRadius: 12,
-          background: `${token.colorPrimary}08`,
-          border: `1px solid ${token.colorPrimary}20`,
-          textAlign: 'left',
-        }}
-      />
+    <Alert
+      title="Supported Formats"
+      description="CSV (.csv), Excel (.xlsx, .xls), JSON (.json) - Maximum file size: 50MB"
+      type="info"
+      showIcon
+      style={{
+        marginTop: 24,
+        borderRadius: 12,
+        background: `${token.colorPrimary}08`,
+        border: `1px solid ${token.colorPrimary}20`,
+        textAlign: 'left',
+      }}
+    />
     </div>
   );
 
@@ -429,7 +429,7 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
               size="small"
               style={{ maxWidth: 500, border: `1px solid ${token.colorBorderSecondary}` }}
             >
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Space orientation="vertical" style={{ width: '100%' }}>
                 <Input
                   placeholder="Table name (e.g., students)"
                   value={newTableName}
@@ -733,11 +733,11 @@ export default function ImportWizard({ onComplete, onCancel }: ImportWizardProps
   };
 
   const steps = [
-    { title: 'Upload', description: 'Select file' },
-    { title: 'Preview', description: 'Review data' },
-    { title: 'Mapping', description: 'Map columns' },
-    { title: 'Validation', description: 'Check errors' },
-    { title: 'Execute', description: 'Import data' },
+  { title: 'Upload', content: 'Select file' },
+  { title: 'Preview', content: 'Review data' },
+  { title: 'Mapping', content: 'Map columns' },
+  { title: 'Validation', content: 'Check errors' },
+  { title: 'Execute', content: 'Import data' },
   ];
 
   const canGoNext = (): boolean => {

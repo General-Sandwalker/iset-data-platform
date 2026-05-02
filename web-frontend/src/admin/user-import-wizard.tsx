@@ -198,11 +198,11 @@ export default function UserImportWizard({
             <Text type="secondary">
               Map each source column to a user field
             </Text>
-            <Space
-              direction="vertical"
-              style={{ width: '100%', marginTop: 16 }}
-              size="middle"
-            >
+<Space
+          orientation="vertical"
+          style={{ width: '100%', marginTop: 16 }}
+          size="middle"
+        >
               {columns.map((col, idx) => (
                 <div
                   key={col}

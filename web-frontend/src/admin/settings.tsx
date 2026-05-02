@@ -423,7 +423,7 @@ export default function SettingsPage() {
             System Backup
           </Title>
           <Card size="small" style={{ borderRadius: 12, background: token.colorBgSpotlight, marginBottom: 16 }}>
-            <Space direction="vertical" size="small">
+            <Space orientation="vertical" size="small">
               <Text strong>Database Backup</Text>
               <Text style={{ color: token.colorTextSecondary, fontSize: 13 }}>
                 Create a full backup of the PostgreSQL database. The backup will be available for download.

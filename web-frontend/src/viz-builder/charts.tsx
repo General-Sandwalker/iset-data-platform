@@ -503,7 +503,7 @@ export default function ChartsPage() {
           </Form>
         ) : (
           <div>
-            <Alert type="success" message="AI Suggestion Generated" style={{ marginBottom: 16 }} />
+            <Alert type="success" title="AI Suggestion Generated" style={{ marginBottom: 16 }} />
             <div style={{ marginBottom: 12 }}>
               <Text strong>Title: </Text><Text>{aiSuggestion.title}</Text>
             </div>
