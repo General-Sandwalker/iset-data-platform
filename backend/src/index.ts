@@ -22,6 +22,7 @@ import { publicLandingRoutes } from './public/routes.js';
 import analyticsRoutes from './analytics/routes.js';
 import reportRoutes from './report-engine/routes.js';
 import partnershipsRoutes from './partnerships/routes.js';
+import systemAdminRoutes from './system-admin/routes.js';
 import { sendSuccess } from './middleware/response.js';
 
 async function startServer() {
@@ -58,6 +59,7 @@ apiRouter.use('/surveys', surveyRoutes);
   apiRouter.use('/analytics', analyticsRoutes);
 apiRouter.use('/reports', reportRoutes);
 apiRouter.use('/partnerships', partnershipsRoutes);
+apiRouter.use('/system', systemAdminRoutes);
 apiRouter.use('/ai', aiLimiter, aiRoutes);
 
 app.use('/api/v1', apiRouter);
