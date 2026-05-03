@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/rbac.js';
-import { sendSuccess, sendCreated } from '../middleware/response.js';
+import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
 import {
   getAllSettings, getSettingByKey, upsertSetting, deleteSetting,
@@ -38,7 +38,7 @@ const listLogsQuery = z.object({
   userId: z.string().uuid().optional(),
   action: z.string().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
 router.get('/settings', async (req, res, next) => {
@@ -73,8 +73,10 @@ router.delete('/settings/:key', requireAdmin, async (req, res, next) => {
 
 router.get('/academic-years', async (req, res, next) => {
   try {
-    const years = await listAcademicYears();
-    sendSuccess(res, years);
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
+    const result = await listAcademicYears({ page, limit });
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 
@@ -122,7 +124,7 @@ router.delete('/academic-years/:id', requireAdmin, validate({ params: uuidParam 
 router.get('/activity-logs', requireAdmin, validate({ query: listLogsQuery }), async (req, res, next) => {
   try {
     const result = await listActivityLogs(req.query as any);
-    sendSuccess(res, result.logs, { page: (req.query as any).page, limit: (req.query as any).limit, total: result.total });
+    paginatedResponse(res, result.logs, { page: (req.query as any).page, limit: (req.query as any).limit, total: result.total });
   } catch (err) { next(err); }
 });
 

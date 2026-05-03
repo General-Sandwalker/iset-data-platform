@@ -50,8 +50,10 @@ router.use(authenticate);
 
 router.get('/tables', async (req, res, next) => {
   try {
-    const tables = await listTables();
-    sendSuccess(res, tables);
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
+    const result = await listTables({ page, limit });
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 
@@ -130,8 +132,10 @@ const updateRelationshipSchema = z.object({
 router.get('/relationships', async (req, res, next) => {
   try {
     const tableId = req.query.tableId as string | undefined;
-    const relationships = await listRelationships(tableId);
-    sendSuccess(res, relationships);
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
+    const result = await listRelationships(tableId, { page, limit });
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 
@@ -168,8 +172,8 @@ router.delete('/relationships/:id', requireAdmin, validate({ params: uuidParam }
 router.get('/tables/:id/data', async (req, res, next) => {
   try {
     const page = req.query.page ? parseInt(String(req.query.page)) : 1;
-    const limit = req.query.limit ? parseInt(String(req.query.limit)) : 20;
-    const sortBy = req.query.sortBy ? String(req.query.sortBy) : undefined;
+const limit = Math.min(100, req.query.limit ? parseInt(String(req.query.limit)) : 20);
+const sortBy = req.query.sortBy ? String(req.query.sortBy) : undefined;
     const sortOrder = req.query.sortOrder === 'asc' ? 'asc' : 'desc';
     const search = req.query.search ? String(req.query.search) : undefined;
 
@@ -215,14 +219,14 @@ router.get('/my-records', authenticate, async (req, res, next) => {
       throw new HttpError(400, 'NO_CIN', 'Your account does not have a CIN linked');
     }
 
-    const tables = await listTables();
-    const userLinkedTables = tables.filter(t => t.is_user_linked);
+    const tablesResult = await listTables();
+    const userLinkedTables = tablesResult.data.filter(t => t.is_user_linked);
 
     const records: Record<string, any[]> = {};
 
     for (const table of userLinkedTables) {
       const result = await query(
-        `SELECT * FROM ${table.name} WHERE cin = $1 ORDER BY created_at DESC`,
+        `SELECT * FROM ${table.name} WHERE cin = $1 ORDER BY created_at DESC LIMIT 100`,
         [userCin]
       );
       if (result.rows.length > 0) {

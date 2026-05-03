@@ -97,8 +97,9 @@ describe('System Admin Endpoints', () => {
 
   describe('Academic Years', () => {
     describe('GET /api/v1/system/academic-years', () => {
-      it('should list academic years for any authenticated user', async () => {
-        mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+it('should list academic years for any authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
         const res = await request(app)
           .get('/api/v1/system/academic-years')
           .set(STUDENT_AUTH);

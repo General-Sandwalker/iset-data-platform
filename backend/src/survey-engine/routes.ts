@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/rbac.js';
-import { sendSuccess, sendCreated } from '../middleware/response.js';
+import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
 import {
   createSurvey,
@@ -86,12 +86,14 @@ router.use(authenticate);
 
 router.get('/', async (req, res, next) => {
   try {
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
     const status = req.query.status as string | undefined;
-    const surveys = await listSurveys({
+    const result = await listSurveys({
       status: status as any,
       createdBy: req.query.createdBy as string | undefined,
-    });
-    sendSuccess(res, surveys);
+    }, { page, limit });
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 

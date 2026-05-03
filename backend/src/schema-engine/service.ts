@@ -122,9 +122,14 @@ export async function createTable(data: {
   }
 }
 
-export async function listTables(): Promise<DynamicTable[]> {
-  const result = await query<DynamicTable>('SELECT * FROM dynamic_tables ORDER BY created_at DESC');
-  return result.rows;
+export async function listTables(params?: { page?: number; limit?: number }): Promise<{ data: DynamicTable[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, params?.page || 1);
+  const limit = Math.min(100, Math.max(1, params?.limit || 20));
+  const offset = (page - 1) * limit;
+  const countResult = await query<{ count: string }>('SELECT COUNT(*) as count FROM dynamic_tables');
+  const total = parseInt(countResult.rows[0].count);
+  const result = await query<DynamicTable>('SELECT * FROM dynamic_tables ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getTableById(id: string): Promise<DynamicTable> {
@@ -427,29 +432,37 @@ export async function createRelationship(data: {
   }
 }
 
-export async function listRelationships(tableId?: string): Promise<RelationshipInfo[]> {
+export async function listRelationships(tableId?: string, params?: { page?: number; limit?: number }): Promise<{ data: RelationshipInfo[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, params?.page || 1);
+  const limit = Math.min(100, Math.max(1, params?.limit || 20));
+  const offset = (page - 1) * limit;
+
   let sql = `
-    SELECT r.*,
-      st.name as source_table_name,
-      sf.name as source_field_name,
-      tt.name as target_table_name,
-      tf.name as target_field_name
-    FROM dynamic_relationships r
-    JOIN dynamic_tables st ON r.source_table_id = st.id
-    JOIN dynamic_fields sf ON r.source_field_id = sf.id
-    JOIN dynamic_tables tt ON r.target_table_id = tt.id
-    LEFT JOIN dynamic_fields tf ON r.target_field_id = tf.id
+  SELECT r.*,
+    st.name as source_table_name,
+    sf.name as source_field_name,
+    tt.name as target_table_name,
+    tf.name as target_field_name
+  FROM dynamic_relationships r
+  JOIN dynamic_tables st ON r.source_table_id = st.id
+  JOIN dynamic_fields sf ON r.source_field_id = sf.id
+  JOIN dynamic_tables tt ON r.target_table_id = tt.id
+  LEFT JOIN dynamic_fields tf ON r.target_field_id = tf.id
   `;
-  const params: any[] = [];
+  const params_list: any[] = [];
 
   if (tableId) {
     sql += ` WHERE r.source_table_id = $1 OR r.target_table_id = $1`;
-    params.push(tableId);
+    params_list.push(tableId);
   }
 
-  sql += ` ORDER BY r.created_at DESC`;
-  const result = await query<RelationshipInfo>(sql, params);
-  return result.rows;
+  const countSQL = `SELECT COUNT(*) as count FROM dynamic_relationships r${tableId ? ' WHERE r.source_table_id = $1 OR r.target_table_id = $1' : ''}`;
+  const countResult = await query<{ count: string }>(countSQL, tableId ? [tableId] : []);
+  const total = parseInt(countResult.rows[0].count);
+
+  sql += ` ORDER BY r.created_at DESC LIMIT $${params_list.length + 1} OFFSET $${params_list.length + 2}`;
+  const result = await query<RelationshipInfo>(sql, [...params_list, limit, offset]);
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getRelationshipById(id: string): Promise<RelationshipInfo> {

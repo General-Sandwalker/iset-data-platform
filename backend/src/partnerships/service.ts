@@ -61,7 +61,10 @@ export async function createCompany(data: {
   return result.rows[0];
 }
 
-export async function listCompanies(options?: { search?: string; sector?: string; isActive?: boolean }): Promise<Company[]> {
+export async function listCompanies(options?: { search?: string; sector?: string; isActive?: boolean; page?: number; limit?: number }): Promise<{ data: Company[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, options?.page || 1);
+  const limit = Math.min(100, Math.max(1, options?.limit || 20));
+  const offset = (page - 1) * limit;
   const conditions: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -81,8 +84,10 @@ export async function listCompanies(options?: { search?: string; sector?: string
     i++;
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const result = await query<Company>(`SELECT * FROM companies ${where} ORDER BY name ASC`, values);
-  return result.rows;
+  const countResult = await query<{ count: string }>(`SELECT COUNT(*) as count FROM companies ${where}`, values);
+  const total = parseInt(countResult.rows[0].count);
+  const result = await query<Company>(`SELECT * FROM companies ${where} ORDER BY name ASC LIMIT $${i++} OFFSET $${i++}`, [...values, limit, offset]);
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getCompanyById(id: string): Promise<Company> {
@@ -136,7 +141,10 @@ export async function createOffer(data: {
   return result.rows[0];
 }
 
-export async function listOffers(options?: { companyId?: string; type?: OfferType; isActive?: boolean }): Promise<Offer[]> {
+export async function listOffers(options?: { companyId?: string; type?: OfferType; isActive?: boolean; page?: number; limit?: number }): Promise<{ data: Offer[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, options?.page || 1);
+  const limit = Math.min(100, Math.max(1, options?.limit || 20));
+  const offset = (page - 1) * limit;
   const conditions: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -156,8 +164,10 @@ export async function listOffers(options?: { companyId?: string; type?: OfferTyp
     i++;
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const result = await query<Offer>(`SELECT * FROM offers ${where} ORDER BY created_at DESC`, values);
-  return result.rows;
+  const countResult = await query<{ count: string }>(`SELECT COUNT(*) as count FROM offers ${where}`, values);
+  const total = parseInt(countResult.rows[0].count);
+  const result = await query<Offer>(`SELECT * FROM offers ${where} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i++}`, [...values, limit, offset]);
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getOfferById(id: string): Promise<Offer> {
@@ -210,7 +220,10 @@ export async function createCollaboration(data: {
   return result.rows[0];
 }
 
-export async function listCollaborations(options?: { companyId?: string; academicYear?: string }): Promise<Collaboration[]> {
+export async function listCollaborations(options?: { companyId?: string; academicYear?: string; page?: number; limit?: number }): Promise<{ data: Collaboration[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, options?.page || 1);
+  const limit = Math.min(100, Math.max(1, options?.limit || 20));
+  const offset = (page - 1) * limit;
   const conditions: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -225,8 +238,10 @@ export async function listCollaborations(options?: { companyId?: string; academi
     i++;
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const result = await query<Collaboration>(`SELECT * FROM collaborations ${where} ORDER BY date DESC NULLS LAST`, values);
-  return result.rows;
+  const countResult = await query<{ count: string }>(`SELECT COUNT(*) as count FROM collaborations ${where}`, values);
+  const total = parseInt(countResult.rows[0].count);
+  const result = await query<Collaboration>(`SELECT * FROM collaborations ${where} ORDER BY date DESC NULLS LAST LIMIT $${i++} OFFSET $${i++}`, [...values, limit, offset]);
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getCollaborationById(id: string): Promise<Collaboration> {

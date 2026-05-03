@@ -28,7 +28,7 @@ const academicFilterSchema = z.object({
   niveau: z.string().optional(),
   genre: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 type AcademicFilter = z.infer<typeof academicFilterSchema>;
@@ -58,7 +58,7 @@ const insertionFilterSchema = z.object({
   anneeDebut: z.string().optional(),
   anneeFin: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 type InsertionFilter = z.infer<typeof insertionFilterSchema>;

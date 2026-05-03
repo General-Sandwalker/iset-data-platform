@@ -91,7 +91,11 @@ export async function createSurvey(data: {
 export async function listSurveys(filters?: {
   status?: SurveyStatus;
   createdBy?: string;
-}): Promise<Survey[]> {
+}, params?: { page?: number; limit?: number }): Promise<{ data: Survey[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, params?.page || 1);
+  const limit = Math.min(100, Math.max(1, params?.limit || 20));
+  const offset = (page - 1) * limit;
+
   const conditions: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -106,11 +110,18 @@ export async function listSurveys(filters?: {
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const result = await query<Survey>(
-    `SELECT * FROM surveys ${where} ORDER BY created_at DESC`,
+
+  const countResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM surveys ${where}`,
     values
   );
-  return result.rows;
+  const total = parseInt(countResult.rows[0].count);
+
+  const result = await query<Survey>(
+    `SELECT * FROM surveys ${where} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i++}`,
+    [...values, limit, offset]
+  );
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getSurveyById(id: string): Promise<Survey> {

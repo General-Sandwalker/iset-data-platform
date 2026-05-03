@@ -45,6 +45,7 @@ describe('Schema Engine Endpoints', () => {
     });
 
     it('should return tables for any authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [mockTable], rowCount: 1 });
       const res = await request(app)
         .get('/api/v1/schema/tables')
@@ -253,6 +254,7 @@ describe('Schema Engine Endpoints', () => {
 
   describe('Relationships', () => {
     it('should list relationships for authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       const res = await request(app)
         .get('/api/v1/schema/relationships')

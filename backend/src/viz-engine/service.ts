@@ -75,7 +75,11 @@ export async function createChart(data: {
   return result.rows[0];
 }
 
-export async function listCharts(filters?: { tableId?: string; isPublic?: boolean; createdBy?: string }): Promise<ChartWithTableName[]> {
+export async function listCharts(filters?: { tableId?: string; isPublic?: boolean; createdBy?: string }, params?: { page?: number; limit?: number }): Promise<{ data: ChartWithTableName[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, params?.page || 1);
+  const limit = Math.min(100, Math.max(1, params?.limit || 20));
+  const offset = (page - 1) * limit;
+
   const conditions: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -95,15 +99,21 @@ export async function listCharts(filters?: { tableId?: string; isPublic?: boolea
 
   const whereSQL = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const result = await query<ChartWithTableName>(
-    `SELECT c.*, dt.name as table_name, dt.display_name as table_display_name
-     FROM charts c
-     JOIN dynamic_tables dt ON c.table_id = dt.id
-     ${whereSQL}
-     ORDER BY c.created_at DESC`,
+  const countResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM charts c ${whereSQL}`,
     values
   );
-  return result.rows;
+  const total = parseInt(countResult.rows[0].count);
+
+  const result = await query<ChartWithTableName>(
+    `SELECT c.*, dt.name as table_name, dt.display_name as table_display_name
+    FROM charts c
+    JOIN dynamic_tables dt ON c.table_id = dt.id
+    ${whereSQL}
+    ORDER BY c.created_at DESC LIMIT $${i++} OFFSET $${i++}`,
+    [...values, limit, offset]
+  );
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getChartById(id: string): Promise<ChartWithTableName> {
@@ -281,7 +291,11 @@ export async function createDashboard(data: {
   return result.rows[0];
 }
 
-export async function listDashboards(filters?: { isPublic?: boolean; createdBy?: string }): Promise<Dashboard[]> {
+export async function listDashboards(filters?: { isPublic?: boolean; createdBy?: string }, params?: { page?: number; limit?: number }): Promise<{ data: Dashboard[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, params?.page || 1);
+  const limit = Math.min(100, Math.max(1, params?.limit || 20));
+  const offset = (page - 1) * limit;
+
   const conditions: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -297,11 +311,17 @@ export async function listDashboards(filters?: { isPublic?: boolean; createdBy?:
 
   const whereSQL = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const result = await query<Dashboard>(
-    `SELECT * FROM dashboards ${whereSQL} ORDER BY created_at DESC`,
+  const countResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM dashboards ${whereSQL}`,
     values
   );
-  return result.rows;
+  const total = parseInt(countResult.rows[0].count);
+
+  const result = await query<Dashboard>(
+    `SELECT * FROM dashboards ${whereSQL} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i++}`,
+    [...values, limit, offset]
+  );
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getDashboardById(id: string): Promise<Dashboard> {

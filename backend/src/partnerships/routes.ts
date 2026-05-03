@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireManager } from '../middleware/rbac.js';
-import { sendSuccess, sendCreated } from '../middleware/response.js';
+import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
 import {
   createCompany, listCompanies, getCompanyById, updateCompany, deleteCompany,
@@ -79,23 +79,31 @@ const listCompaniesQuery = z.object({
   search: z.string().optional(),
   sector: z.string().optional(),
   isActive: z.enum(['true', 'false']).optional().transform(v => v === 'true'),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 const listOffersQuery = z.object({
   companyId: z.string().uuid().optional(),
   type: z.enum(offerTypes as unknown as [string, ...string[]]).optional(),
   isActive: z.enum(['true', 'false']).optional().transform(v => v === 'true'),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 const listCollaborationsQuery = z.object({
   companyId: z.string().uuid().optional(),
   academicYear: z.string().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 router.get('/companies', validate({ query: listCompaniesQuery }), async (req, res, next) => {
   try {
-    const companies = await listCompanies(req.query as any);
-    sendSuccess(res, companies);
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
+    const result = await listCompanies({ ...req.query, page, limit } as any);
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 
@@ -132,8 +140,10 @@ router.delete('/companies/:id', requireManager, validate({ params: uuidParam }),
 
 router.get('/offers', validate({ query: listOffersQuery }), async (req, res, next) => {
   try {
-    const offers = await listOffers(req.query as any);
-    sendSuccess(res, offers);
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
+    const result = await listOffers({ ...req.query, page, limit } as any);
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 
@@ -170,8 +180,10 @@ router.delete('/offers/:id', requireManager, validate({ params: uuidParam }), as
 
 router.get('/collaborations', validate({ query: listCollaborationsQuery }), async (req, res, next) => {
   try {
-    const collaborations = await listCollaborations(req.query as any);
-    sendSuccess(res, collaborations);
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
+    const result = await listCollaborations({ ...req.query, page, limit } as any);
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 

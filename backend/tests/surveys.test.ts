@@ -48,6 +48,7 @@ describe('Survey Endpoints', () => {
     });
 
     it('should list surveys for any authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [mockSurvey], rowCount: 1 });
       const res = await request(app)
         .get('/api/v1/surveys')

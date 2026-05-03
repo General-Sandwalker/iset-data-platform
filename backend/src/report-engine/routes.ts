@@ -77,17 +77,21 @@ const listReportsQuerySchema = z.object({
   userCin: z.string().optional(),
   status: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 router.use(authenticate);
 
 router.get('/templates', requireManager, async (req, res, next) => {
   try {
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
     const templates = await listTemplates({
       createdBy: req.query.createdBy as string | undefined,
+      page,
+      limit,
     });
-    sendSuccess(res, templates);
+    paginatedResponse(res, templates.data, { page: templates.page, limit: templates.limit, total: templates.total });
   } catch (err) { next(err); }
 });
 
@@ -163,16 +167,14 @@ router.post('/templates/:id/preview', requireManager, validate({ params: uuidPar
 router.get('/reports', requireManager, validate({ query: listReportsQuerySchema }), async (req, res, next) => {
   try {
     const q = req.query as unknown as z.infer<typeof listReportsQuerySchema>;
-    const reports = await listGeneratedReports({
+    const result = await listGeneratedReports({
       templateId: q.templateId,
       userCin: q.userCin,
       status: q.status,
+      page: q.page,
+      limit: q.limit,
     });
-    const page = q.page;
-    const limit = q.limit;
-    const start = (page - 1) * limit;
-    const paged = reports.slice(start, start + limit);
-    paginatedResponse(res, paged, { page, limit, total: paged.length });
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 

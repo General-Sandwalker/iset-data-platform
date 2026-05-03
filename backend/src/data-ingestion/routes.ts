@@ -150,7 +150,7 @@ router.post(
 router.get('/', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const page = req.query.page ? parseInt(String(req.query.page)) : 1;
-    const limit = req.query.limit ? parseInt(String(req.query.limit)) : 20;
+    const limit = Math.min(100, req.query.limit ? parseInt(String(req.query.limit)) : 20);
 
     const result = await listImports(page, limit);
 

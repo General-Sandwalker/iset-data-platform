@@ -57,9 +57,14 @@ export async function deleteSetting(key: string): Promise<void> {
   if (result.rowCount === 0) throw new HttpError(404, 'SETTING_NOT_FOUND', 'Setting not found');
 }
 
-export async function listAcademicYears(): Promise<AcademicYear[]> {
-  const result = await query<AcademicYear>('SELECT * FROM academic_years ORDER BY start_date DESC');
-  return result.rows;
+export async function listAcademicYears(params?: { page?: number; limit?: number }): Promise<{ data: AcademicYear[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, params?.page || 1);
+  const limit = Math.min(100, Math.max(1, params?.limit || 20));
+  const offset = (page - 1) * limit;
+  const countResult = await query<{ count: string }>('SELECT COUNT(*) as count FROM academic_years');
+  const total = parseInt(countResult.rows[0].count);
+  const result = await query<AcademicYear>('SELECT * FROM academic_years ORDER BY start_date DESC LIMIT $1 OFFSET $2', [limit, offset]);
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getAcademicYearById(id: string): Promise<AcademicYear> {
@@ -166,8 +171,8 @@ export async function listActivityLogs(options?: {
     values.push(`%${options.action}%`);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const page = options?.page || 1;
-  const limit = options?.limit || 50;
+  const page = Math.max(1, options?.page || 1);
+  const limit = Math.min(100, Math.max(1, options?.limit || 20));
   const offset = (page - 1) * limit;
 
   const countResult = await query<{ count: string }>(

@@ -58,8 +58,9 @@ describe('Viz/Chart/Dashboard Endpoints', () => {
         expect(res.status).toBe(401);
       });
 
-      it('should list charts for any authenticated user', async () => {
-        mockQuery.mockResolvedValueOnce({ rows: [mockChart], rowCount: 1 });
+it('should list charts for any authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [mockChart], rowCount: 1 });
         const res = await request(app)
           .get('/api/v1/viz/charts')
           .set(STUDENT_AUTH);
@@ -195,8 +196,9 @@ describe('Viz/Chart/Dashboard Endpoints', () => {
         expect(res.status).toBe(401);
       });
 
-      it('should list dashboards for any authenticated user', async () => {
-        mockQuery.mockResolvedValueOnce({ rows: [mockDashboard], rowCount: 1 });
+it('should list dashboards for any authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [mockDashboard], rowCount: 1 });
         const res = await request(app)
           .get('/api/v1/viz/dashboards')
           .set(STUDENT_AUTH);

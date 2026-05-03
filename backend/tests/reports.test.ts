@@ -49,6 +49,7 @@ describe('Report Endpoints', () => {
     });
 
     it('should list templates for manager', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [mockTemplate], rowCount: 1 });
       const res = await request(app)
         .get('/api/v1/reports/templates')
@@ -140,9 +141,9 @@ describe('Report Endpoints', () => {
         expect(res.status).toBe(403);
       });
 
-      it('should list reports for manager', async () => {
-        mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-        mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 });
+it('should list reports for manager', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
         const res = await request(app)
           .get('/api/v1/reports/reports')
           .set(MANAGER_AUTH);

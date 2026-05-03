@@ -58,7 +58,13 @@ export async function createTemplate(data: {
 
 export async function listTemplates(options?: {
   createdBy?: string;
-}): Promise<ReportTemplate[]> {
+  page?: number;
+  limit?: number;
+}): Promise<{ data: ReportTemplate[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, options?.page || 1);
+  const limit = Math.min(100, Math.max(1, options?.limit || 20));
+  const offset = (page - 1) * limit;
+
   const conditions: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -70,12 +76,18 @@ export async function listTemplates(options?: {
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const result = await query<ReportTemplate>(
-    `SELECT * FROM report_templates ${where} ORDER BY created_at DESC`,
+  const countResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM report_templates ${where}`,
     values
   );
+  const total = parseInt(countResult.rows[0].count);
 
-  return result.rows;
+  const result = await query<ReportTemplate>(
+    `SELECT * FROM report_templates ${where} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i++}`,
+    [...values, limit, offset]
+  );
+
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getTemplateById(id: string): Promise<ReportTemplate> {
@@ -185,7 +197,13 @@ export async function listGeneratedReports(options?: {
   templateId?: string;
   userCin?: string;
   status?: string;
-}): Promise<GeneratedReport[]> {
+  page?: number;
+  limit?: number;
+}): Promise<{ data: GeneratedReport[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, options?.page || 1);
+  const limit = Math.min(100, Math.max(1, options?.limit || 20));
+  const offset = (page - 1) * limit;
+
   const conditions: string[] = [];
   const values: any[] = [];
   let i = 1;
@@ -205,12 +223,18 @@ export async function listGeneratedReports(options?: {
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const result = await query<GeneratedReport>(
-    `SELECT * FROM generated_reports ${where} ORDER BY created_at DESC`,
+  const countResult = await query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM generated_reports ${where}`,
     values
   );
+  const total = parseInt(countResult.rows[0].count);
 
-  return result.rows;
+  const result = await query<GeneratedReport>(
+    `SELECT * FROM generated_reports ${where} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i++}`,
+    [...values, limit, offset]
+  );
+
+  return { data: result.rows, total, page, limit };
 }
 
 export async function getGeneratedReportById(id: string): Promise<GeneratedReport> {
@@ -258,8 +282,8 @@ export interface ReportSection {
 }
 
 async function fetchStudentContext(cin: string): Promise<Record<string, any>> {
-  const tables = await listTables();
-  const userLinkedTables = tables.filter((t) => t.is_user_linked);
+  const tables = await listTables({ page: 1, limit: 100 });
+  const userLinkedTables = tables.data.filter((t) => t.is_user_linked);
 
   const context: Record<string, any> = {};
 

@@ -50,8 +50,9 @@ describe('Partnerships Endpoints', () => {
         expect(res.status).toBe(401);
       });
 
-      it('should list companies for any authenticated user', async () => {
-        mockQuery.mockResolvedValueOnce({ rows: [mockCompany], rowCount: 1 });
+it('should list companies for any authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [mockCompany], rowCount: 1 });
         const res = await request(app)
           .get('/api/v1/partnerships/companies')
           .set(STUDENT_AUTH);
@@ -144,8 +145,9 @@ describe('Partnerships Endpoints', () => {
 
   describe('Offers', () => {
     describe('GET /api/v1/partnerships/offers', () => {
-      it('should list offers for any authenticated user', async () => {
-        mockQuery.mockResolvedValueOnce({ rows: [mockOffer], rowCount: 1 });
+it('should list offers for any authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [mockOffer], rowCount: 1 });
         const res = await request(app)
           .get('/api/v1/partnerships/offers')
           .set(STUDENT_AUTH);
@@ -196,8 +198,9 @@ describe('Partnerships Endpoints', () => {
 
   describe('Collaborations', () => {
     describe('GET /api/v1/partnerships/collaborations', () => {
-      it('should list collaborations for any authenticated user', async () => {
-        mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+it('should list collaborations for any authenticated user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
         const res = await request(app)
           .get('/api/v1/partnerships/collaborations')
           .set(STUDENT_AUTH);

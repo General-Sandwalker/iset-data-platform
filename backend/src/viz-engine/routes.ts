@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/rbac.js';
-import { sendSuccess, sendCreated } from '../middleware/response.js';
+import { sendSuccess, sendCreated, paginatedResponse } from '../middleware/response.js';
 import { logActivity } from '../middleware/activity-logger.js';
 import {
   createChart, listCharts, getChartById, updateChart, deleteChart,
@@ -78,12 +78,14 @@ router.use(authenticate);
 // --- Charts ---
 router.get('/charts', async (req, res, next) => {
   try {
-    const charts = await listCharts({
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
+    const result = await listCharts({
       tableId: req.query.tableId as string | undefined,
       isPublic: req.query.isPublic === 'true' ? true : req.query.isPublic === 'false' ? false : undefined,
       createdBy: req.query.createdBy as string | undefined,
-    });
-    sendSuccess(res, charts);
+    }, { page, limit });
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 
@@ -153,11 +155,13 @@ router.post('/charts/execute-raw', requireAdmin, validate({ body: executeRawSche
 // --- Dashboards ---
 router.get('/dashboards', async (req, res, next) => {
   try {
-    const dashboards = await listDashboards({
+    const page = req.query.page ? parseInt(String(req.query.page)) : 1;
+    const limit = req.query.limit ? Math.min(100, parseInt(String(req.query.limit))) : 20;
+    const result = await listDashboards({
       isPublic: req.query.isPublic === 'true' ? true : req.query.isPublic === 'false' ? false : undefined,
       createdBy: req.query.createdBy as string | undefined,
-    });
-    sendSuccess(res, dashboards);
+    }, { page, limit });
+    paginatedResponse(res, result.data, { page: result.page, limit: result.limit, total: result.total });
   } catch (err) { next(err); }
 });
 

@@ -39,7 +39,8 @@ publicLandingRoutes.get('/surveys', async (_req, res, next) => {
   try {
     const result = await query(
       `SELECT id, title, description, access_type, published_slug, allow_multiple_responses
-       FROM surveys WHERE status = 'published' ORDER BY updated_at DESC`
+       FROM surveys WHERE status = 'published' ORDER BY updated_at DESC LIMIT $1`,
+      [20]
     );
     sendSuccess(res, result.rows);
   } catch (err) { next(err); }
