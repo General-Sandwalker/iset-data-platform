@@ -3,7 +3,10 @@ dist/
 .env
 uploads/
 *.log
+tests/
 .git/
+.gitignore
 *.md
 Dockerfile
-*.ts
+.dockerignore
+vitest.config.ts

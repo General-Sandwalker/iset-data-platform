@@ -18,10 +18,6 @@ CREATE INDEX IF NOT EXISTS idx_charts_created_at ON charts(created_at DESC);
 -- Surveys listing by status + date
 CREATE INDEX IF NOT EXISTS idx_surveys_status_created ON surveys(status, created_at DESC);
 
--- Survey responses lookup
-CREATE INDEX IF NOT EXISTS idx_survey_responses_survey_id ON survey_responses(survey_id);
-CREATE INDEX IF NOT EXISTS idx_survey_responses_created_at ON survey_responses(created_at DESC);
-
 -- Generated reports by template + status
 CREATE INDEX IF NOT EXISTS idx_generated_reports_template_status ON generated_reports(template_id, status);
 
@@ -30,6 +26,3 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_action_created ON activity_logs(act
 
 -- Imports by status + date (admin dashboard)
 CREATE INDEX IF NOT EXISTS idx_imports_status_created ON imports(status, created_at DESC);
-
--- Dashboard charts ordering
-CREATE INDEX IF NOT EXISTS idx_dashboard_charts_dashboard_order ON dashboard_charts(dashboard_id, order_index);
